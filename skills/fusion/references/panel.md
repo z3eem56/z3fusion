@@ -13,8 +13,10 @@ every panelist the user's task **verbatim** and let each answer it straight.
 
 The diversity is already there for free. Running the same prompt independently produces different
 reasoning paths, different tool calls, and different source selections — even when it's the *same model
-answering twice*. (Two independent Opus 4.8 runs synthesized by Opus 4.8 beat a single Opus 4.8 run by a
-wide margin precisely because of this.) You don't manufacture diversity; you harvest it from independence.
+answering twice*. (Two independent runs of the same model, synthesized by the judge, beat a single run of
+that model by a wide margin precisely because of this — and the effect compounds further once the
+panelists are genuinely different models from different providers.) You don't manufacture diversity; you
+harvest it from independence.
 
 ## Independence is the rule
 
@@ -24,16 +26,37 @@ answers meet. Cross-pollination before the judge defeats the entire mechanism.
 
 ## Panel composition per slug
 
-- `opus4.8-4.8` — the **same prompt run twice** as two independent Opus 4.8 panelists (Agent subagents),
-  then judged. Same model, two cold runs.
-- `opus4.8-gpt5.5` — Opus 4.8 and GPT-5.5 (codex) answer **in parallel**, then judged.
-- `opus4.8-gemini3.1pro` — Opus 4.8 and Gemini 3.1 Pro (agy) answer **in parallel**, then judged.
-- `opus4.8-gpt5.5-gemini3.1pro` — Opus 4.8, GPT-5.5, and Gemini 3.1 Pro answer in parallel, then judged.
+Fusion panels are composable: any 1 to 8 panelists, drawn from any provider, in any combination, using the
+slot syntax `model@runner` (a bare `model` with no `@` means an in-session Claude Agent-tool subagent —
+`@claude` is the explicit spelling of the same thing). A panelist can be an in-session Claude subagent, a
+model reached through a CLI (`codex` for OpenAI models, `agy` for Google models), a fully local model
+(Ollama, LM Studio, or any other OpenAI-compatible local server), or any model listed on OpenRouter or
+another OpenAI-compatible provider. Nothing about the mechanism — independence, no lenses, one judge —
+depends on which models, how many, or which providers end up in the panel.
 
-In every case Opus 4.8 is also the judge/synthesizer, and the judge is kept separate from the panelists
-(the panelists are spawned; the orchestrator judges) so the synthesis reads the answers fresh rather than
-defending one it wrote itself. Opus always judges and writes the final answer — the pipeline can't be
-reversed, since the panelist models can't call back out to spawn Opus.
+Four presets exist as convenience defaults, not as the boundary of what's possible:
+
+- `opus4.8-4.8` — the **same prompt run twice** as two independent in-session Claude panelists (Agent
+  subagents), then judged. Same model, two cold runs.
+- `opus4.8-gpt5.5` — an in-session Claude panelist and GPT-5.5 (codex) answer **in parallel**, then judged.
+- `opus4.8-gemini3.1pro` — an in-session Claude panelist and Gemini 3.1 Pro (agy) answer **in parallel**,
+  then judged.
+- `opus4.8-gpt5.5-gemini3.1pro` — an in-session Claude panelist, GPT-5.5, and Gemini 3.1 Pro answer in
+  parallel, then judged.
+
+These four are legacy presets, kept for convenience — not a ceiling. Any other composition is equally
+valid: for example, a custom panel of `@claude` (in-session), `gpt-5.5@codex`, and `llama3.3@ollama` mixes
+a hosted frontier model with a fully local, zero-API-key model running on the user's own machine — useful
+when part of the question shouldn't leave the box, or when a specific model outside the four presets is
+the right fit.
+
+In every case the orchestrating Claude Code session — whichever model is actually running that session —
+is also the judge/synthesizer, kept separate from the panelists (the panelists are spawned or invoked; the
+orchestrating session judges) so the synthesis reads the answers fresh rather than defending one it wrote
+itself. The orchestrating session always judges and writes the final answer — the pipeline can't be
+reversed, since panelist models can't call back out to spawn the orchestrator. This is a real, stated scope
+boundary, not an oversight: the panel is freely composable (any 1 to 8 models, any provider) — the judge is
+not; it is always, and only, whichever model is running the Fusion session.
 
 ## Prompt each panelist gets
 
