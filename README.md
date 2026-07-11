@@ -10,19 +10,9 @@ Code session (whichever model it's actually running as — Opus, Sonnet, Haiku, 
 set to) reads every answer, judges it into a structured analysis (consensus, contradictions, partial
 coverage, unique insights, blind spots), and writes a final answer grounded in that analysis.
 
-```
-                      ┌──────────────┐
-                 ┌──▶ │  panelist 1  │ ─┐   (web + bash, independent)
-                 │    └──────────────┘  │
-                 │    ┌──────────────┐  │   ┌──────────────┐
- prompt ──▶ fan ─┼──▶ │  panelist 2  │ ─┼─▶ │ orchestrating│ ──▶ final answer
-            out  │    └──────────────┘  │   │   session    │     (grounded in
-                 │    ┌──────────────┐  │   │  (judge +    │      the analysis)
-                 └──▶ │  panelist 3  │ ─┘   │  synthesize) │
-                      └──────────────┘      └──────────────┘
-              any model@runner mix            consensus · contradictions ·
-              (each answers blind)             partial · unique · blind spots
-```
+<p align="center">
+  <img src="assets/pipeline.svg" alt="Fusion pipeline: a prompt fans out to several independent panelists (any model@runner mix, each answering blind with web + bash), which the orchestrating Claude Code session judges and synthesizes into consensus, contradictions, partial coverage, unique insights and blind spots, then writes a final grounded answer." width="100%">
+</p>
 
 ## Why a panel beats one model
 
