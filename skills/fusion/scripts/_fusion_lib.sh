@@ -34,3 +34,39 @@ _run_with_timeout() {
     exit($rc >> 8);            # otherwise propagate the command exit code
   ' "$secs" "$@"
 }
+
+# _extract_openai_content JSON_FILE OUTPUT_FILE
+# Reads an OpenAI-chat-completions-shaped JSON response (choices[0].message.content),
+# falling back to a bare Ollama-native shape (message.content) when there's no "choices"
+# array, and writes just that text to OUTPUT_FILE. Missing/unreadable/malformed JSON, or a
+# response matching neither shape, is NOT an error here: OUTPUT_FILE is simply left empty.
+# The caller does the anti-empty guard (same convention as every existing runner), not this
+# helper.
+_extract_openai_content() {
+  local json_file="$1" output_file="$2"
+  python3 -c '
+import json
+import sys
+
+json_file, output_file = sys.argv[1], sys.argv[2]
+data = None
+try:
+    with open(json_file, "r", encoding="utf-8", errors="replace") as f:
+        data = json.load(f)
+except Exception:
+    data = None
+
+text = ""
+if isinstance(data, dict):
+    try:
+        text = data["choices"][0]["message"]["content"] or ""
+    except (KeyError, IndexError, TypeError):
+        try:
+            text = data["message"]["content"] or ""
+        except (KeyError, TypeError):
+            text = ""
+
+with open(output_file, "w", encoding="utf-8") as f:
+    f.write(text if isinstance(text, str) else "")
+' "$json_file" "$output_file"
+}

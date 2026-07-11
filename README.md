@@ -4,44 +4,92 @@
 
 Fusion-Fable is a [Claude Code](https://claude.com/claude-code) skill that runs a hard question through a
 **panel → judge** pipeline. The same prompt is dispatched to several models *in parallel* — each answering
-independently with web search and bash, none seeing the others' work — and then Opus 4.8 judges every
-answer into a structured analysis (consensus, contradictions, partial coverage, unique insights, blind
-spots) and writes a final answer grounded in it.
+independently with web search and bash, none seeing the others' work — and then the orchestrating
+Claude Code session (whichever model it is actually running as — Opus, Sonnet, Haiku, Fable, whatever
+`/model` is set to) judges every answer into a structured analysis (consensus, contradictions, partial
+coverage, unique insights, blind spots) and writes a final answer grounded in it.
 
 The mechanism is **independence, then synthesis**. The diversity that makes a panel beat a single model is
 harvested, not manufactured: running the same prompt independently yields different reasoning paths, tool
 calls, and sources — even two cold runs of the *same* model diverge enough that synthesizing them beats
 running it once. So there are no contrived "lenses" or personas; every panelist gets the task verbatim and
-answers it straight. Fuse **Opus 4.8 + Opus 4.8**, or **Opus 4.8 + GPT-5.5** (via the `codex` CLI), into a
-result better than either alone — a Fable-tier fusion.
+answers it straight. Fuse **two in-session Claude runs**, or **Claude + GPT-5.5** (via the `codex` CLI),
+into a result better than either alone — a Fable-tier fusion.
+
+The panel itself is a fully composable list of **`model@runner`** slots (1-8 of them), not limited to any
+fixed roster: an in-session Claude subagent, GPT-5.5 via `codex`, Gemini via `agy`, a fully local model
+running on your own machine through **Ollama** or **LM Studio** (zero API key), or literally any
+**OpenRouter**-listed model from any provider (Anthropic, OpenAI, DeepSeek, Meta/Llama, Mistral, xAI, Qwen,
+and more) the moment `OPENROUTER_API_KEY` is set. The three panels below are a zero-config starting point,
+not the ceiling — see [**Bring your own model**](#bring-your-own-model) to compose anything beyond them.
+
+**Design reference.** Fusion-Fable's panel → judge shape is a local implementation of
+[OpenRouter's Fusion Router](https://openrouter.ai/docs/guides/routing/routers/fusion-router): its
+`analysis_models` array (1-8 models, any provider, run in parallel) judged/synthesized by one outer `model`
+is exactly what the fan-out + judge steps below do — the difference is Fusion-Fable dispatches every
+panelist itself, locally, over CLI/API calls, so it works fully with **or without** an OpenRouter account.
+(OpenRouter also ships fusion as a hosted, server-side capability — its
+[Fusion plugin](https://openrouter.ai/docs/guides/features/plugins/fusion) — which is a different thing
+from the Fusion Router design above: an `openrouter` panel slot can optionally attach that plugin via the
+EXPERIMENTAL `extraJson` field in `~/.claude/fusion-runners.json`, but that path is opt-in and unverified
+here; the plain per-model `model@openrouter` call described below is the default, robust path.)
 
 ```
                       ┌──────────────┐
                  ┌──▶ │  panelist 1  │ ─┐   (web + bash, independent)
                  │    └──────────────┘  │
                  │    ┌──────────────┐  │   ┌──────────────┐
- prompt ──▶ fan ─┼──▶ │  panelist 2  │ ─┼─▶ │   Opus 4.8   │ ──▶ final answer
-            out  │    └──────────────┘  │   │   (judge +   │     (grounded in
-                 │    ┌──────────────┐  │   │  synthesize) │      the analysis)
-                 └──▶ │  panelist 3  │ ─┘   └──────────────┘
-                      └──────────────┘
-              Opus 4.8 / GPT-5.5 / Gemini      consensus · contradictions ·
+ prompt ──▶ fan ─┼──▶ │  panelist 2  │ ─┼─▶ │ orchestrating│ ──▶ final answer
+            out  │    └──────────────┘  │   │   session    │     (grounded in
+                 │    ┌──────────────┐  │   │  (judge +    │      the analysis)
+                 └──▶ │  panelist 3  │ ─┘   │  synthesize) │
+                      └──────────────┘      └──────────────┘
+              any model@runner mix            consensus · contradictions ·
               (each answers blind)             partial · unique · blind spots
 ```
 
-Opus 4.8 **always** judges and writes the final answer — the pipeline can't be reversed, because the
-panelist models can't call back out to spawn Opus.
+The orchestrating Claude Code session **always** judges and writes the final answer — the pipeline
+can't be reversed, because external panelist CLIs/APIs have no way to call back into this session to
+spawn more subagents. **This is a stated scope boundary, not a bug:** the panel is freely composable
+across any model/provider, but the judge is always this session's own model.
 
-## The panels
+## The panels (quickstart / zero-config example)
+
+Three pinned, zero-setup panels to get going with — no custom panel spec required:
 
 | Slug | Panel | Requires |
 | --- | --- | --- |
-| `opus4.8-4.8` | the **same prompt run twice** as 2 independent Opus 4.8 panelists → Opus judges | nothing — works everywhere |
-| `opus4.8-gpt5.5` | Opus 4.8 + **GPT-5.5** (codex) in parallel → Opus judges | the `codex` CLI |
-| `opus4.8-gpt5.5-gemini3.1pro` | Opus 4.8 + GPT-5.5 + **Gemini 3.1 Pro** in parallel → Opus judges | `codex` + `agy` CLIs |
+| `opus4.8-4.8` | the **same prompt run twice** as 2 independent in-session Claude panelists → the session judges | nothing — works everywhere |
+| `opus4.8-gpt5.5` | in-session Claude + **GPT-5.5** (codex) in parallel → the session judges | the `codex` CLI |
+| `opus4.8-gpt5.5-gemini3.1pro` | in-session Claude + GPT-5.5 + **Gemini 3.1 Pro** in parallel → the session judges | `codex` + `agy` CLIs |
 
-The skill auto-detects which panelist CLIs are installed and uses the richest panel available, falling
-back gracefully when one is missing.
+The skill auto-detects which panelist CLIs are installed and uses the richest of these three panels
+available, falling back gracefully when one is missing. These are convenience presets, not a limit —
+any panel slot can be replaced or extended with any other `model@runner` pairing; see the next section.
+
+## Bring your own model
+
+Every panel slot is a composable **`model@runner`** pairing, so the three presets above are a starting
+point, not the whole story. A few concrete combos, spanning cloud and fully local:
+
+- `llama3.3@ollama` — a fully local Llama 3.3 served by **Ollama**, zero API key, never leaves your
+  machine.
+- `qwen2.5-coder@lmstudio` — a model already loaded in **LM Studio**'s local server (`localhost:1234`),
+  also zero API key.
+- `deepseek/deepseek-v3.2@openrouter`, `meta-llama/llama-4-maverick@openrouter`, or
+  `x-ai/grok-4@openrouter` — any model **OpenRouter** lists, reached with a plain per-model HTTP call once
+  `OPENROUTER_API_KEY` is set.
+- `opus@claude,gpt-5.5@codex,llama3.3@ollama` — an in-session Claude subagent, GPT-5.5 via `codex`, and a
+  fully local Ollama model, all in one panel.
+
+Compose these with `--models <model@runner,...>` (e.g. via the generic `/fusion` command), or just ask in
+prose. Register further local/remote runners — another local server, an internal proxy, a bespoke shell
+command — in `~/.claude/fusion-runners.json`.
+
+**Scope boundary, stated plainly:** the **panel** is freely composable across any provider — but the
+**judge/synthesizer is always the orchestrating Claude Code session's own model**. External panelist
+CLIs and APIs have no way to call back into this session to spawn the judge, so the pipeline can never be
+reversed. That is a deliberate, stated design boundary, not a bug to work around.
 
 ## Install
 
@@ -66,8 +114,12 @@ Three ways, all equivalent under the hood:
   ```
   /fusion-opus4.8  does my JWT refresh-rotation design have a replay hole?
   /fusion-gpt5.5   is git push --force-with-lease actually safe on a shared branch?
-  /fusion-3        full 3-family panel (Opus 4.8 + GPT-5.5 + Gemini 3.1 Pro)
+  /fusion-gemini   is this migration script safe to run against a live replica?
+  /fusion-3        full 3-family panel (Claude + GPT-5.5 + Gemini 3.1 Pro)
   ```
+- **Composable panel** — `/fusion --models <model@runner,...> :: <question>` to pick any mix of
+  models/providers/local runners yourself, or `/fusion <question>` with no `--models` to let
+  `detect_panel.sh` recommend the richest legacy preset automatically.
 - **Force a panel in prose** — "run the `opus4.8-gpt5.5` Fusion on …".
 
 Every run returns the same structure: a **Final answer** up top, then the audit trail —
@@ -114,8 +166,8 @@ planning fully manual.
 
 ## Requirements
 
-- **Claude Code**, with the session running **Opus 4.8** (panelist subagents and the judge inherit the
-  session model — on another model the slug is nominal, not literal).
+- **Claude Code**, any model (panelist subagents and the judge always inherit the orchestrating session's
+  own model — the `opus4.8-*` slug names are historical/nominal, not a requirement to actually run Opus).
 - For `opus4.8-gpt5.5`: the [`codex` CLI](https://github.com/openai/codex) installed and logged in to an
   account with GPT-5.5 access. The runner uses `codex exec` (tested against `codex-cli` 0.139).
   It runs against a throwaway copy of the current repo/workdir with trusted local access so tools such as
@@ -153,8 +205,10 @@ skills/fusion/
 skills/fusion-plan/
   SKILL.md                  OMC interview → 3-round seeded panel → concise .omc/plans/ → review/execute
 commands/
+  fusion.md                 /fusion          (composable --models <model@runner,...> panel, any provider)
   fusion-opus4.8.md         /fusion-opus4.8  (pinned opus4.8-4.8 panel)
   fusion-gpt5.5.md          /fusion-gpt5.5   (pinned opus4.8-gpt5.5 panel)
+  fusion-gemini.md          /fusion-gemini   (pinned opus4.8-gemini3.1pro panel)
   fusion-3.md               /fusion-3        (pinned full opus4.8-gpt5.5-gemini3.1pro panel)
   fusion-plan.md            /fusion-plan     (OMC-integrated iterative planning; reuses fusion's run_codex.sh)
 hooks/
@@ -164,10 +218,11 @@ install.sh                  copies the above into ~/.claude (hook copied but lef
 
 ## Why a panel beats one model
 
-On the DRACO deep-research benchmark, OpenRouter found that fusing model answers consistently beats the
-individual models — and that a meaningful chunk of the lift comes from the *synthesis step itself*, not
-just from mixing architectures: two independent runs of one model, synthesized, beat that model run once.
-Fusion-Fable implements that same independence-then-judge pipeline locally in Claude Code.
+On the DRACO deep-research benchmark, [OpenRouter](https://openrouter.ai/docs/guides/routing/routers/fusion-router)
+found that fusing model answers consistently beats the individual models — and that a meaningful chunk of
+the lift comes from the *synthesis step itself*, not just from mixing architectures: two independent runs
+of one model, synthesized, beat that model run once. Fusion-Fable implements that same
+independence-then-judge pipeline locally in Claude Code.
 
 ## Cost & latency
 

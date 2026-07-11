@@ -1,8 +1,10 @@
 # Judge rubric
 
-The judge is Opus 4.8 — the orchestrator, reading every panelist's response *after* all of them have
-returned independently. The judge does not vote or average. Its job depends on what the task actually
-asks for, so **first classify the deliverable**, then follow the matching track:
+The judge is the orchestrating Claude Code session — whichever model is actually running that session —
+reading every panelist's response *after* all of them have returned independently. The panel is freely
+composable (any 1 to 8 models, from any provider), but the judge is not: it is always the session that
+dispatched the panel, never one of the panelists. The judge does not vote or average. Its job depends on
+what the task actually asks for, so **first classify the deliverable**, then follow the matching track:
 
 - **Artifact task** — the user wants a concrete buildable thing: code, a script, a config, a Minecraft
   mod/datapack, a schema, a command. The panelists each produced a candidate implementation. → Follow
@@ -14,8 +16,11 @@ asks for, so **first classify the deliverable**, then follow the matching track:
 When a task is mixed (e.g. "design and implement X"), the implementation is the deliverable: use Track A
 for the code and fold the reasoning in as brief rationale.
 
-Read every panelist response in full first, and attribute by panelist (e.g. "Opus run A", "GPT-5.5") so
-the user can see where each decision came from.
+Read every panelist response in full first, and attribute by panelist (e.g. "panelist A (in-session
+Claude)", "panelist B (GPT-5.5 via codex)", "panelist C (llama3.3 via local Ollama)") so the user can see
+where each decision came from. A panel can hold anywhere from 1 to 8 panelists across any mix of
+providers — these are illustrative examples, not the full set of panelists that might actually be
+present; attribute to however many actually ran.
 
 ---
 

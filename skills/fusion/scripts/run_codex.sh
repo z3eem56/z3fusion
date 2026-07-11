@@ -2,11 +2,15 @@
 # run_codex.sh — run one GPT-5.5 panelist (via codex) on a prompt, with web search + bash.
 #
 # Usage:
-#   run_codex.sh <prompt_file> <output_file> [reasoning_effort]
+#   run_codex.sh <prompt_file> <output_file> [reasoning_effort] [model]
 #
 # - <prompt_file>   : path to a file containing the FULL panelist prompt (verbatim user task + brief instruction)
 # - <output_file>   : where the panelist's final answer is written (clean, just the answer)
 # - reasoning_effort: low | medium | high | xhigh   (default: xhigh)
+# - model           : optional model override, e.g. gpt-5.4 (default: codex's own configured model).
+#                      Passed through as `--model <model>` — the verified, documented codex exec flag
+#                      ("Override the configured model for this run"), distinct from the
+#                      `-c model_reasoning_effort=...` config override below. Omit/empty = old behavior.
 #
 # Notes:
 # - `-o/--output-last-message` writes ONLY the agent's final message — no streaming noise to parse.
@@ -25,9 +29,15 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/_fusion_lib.sh"
 
-prompt_file="${1:?usage: run_codex.sh <prompt_file> <output_file> [reasoning_effort]}"
-output_file="${2:?usage: run_codex.sh <prompt_file> <output_file> [reasoning_effort]}"
+prompt_file="${1:?usage: run_codex.sh <prompt_file> <output_file> [reasoning_effort] [model]}"
+output_file="${2:?usage: run_codex.sh <prompt_file> <output_file> [reasoning_effort] [model]}"
 effort="${3:-xhigh}"
+model="${4:-}"
+
+if ! have codex; then
+  echo "[run_codex.sh] codex CLI not installed — skip this panelist." >&2
+  exit 127
+fi
 
 case "$prompt_file" in
   /*) ;;
@@ -85,14 +95,24 @@ if command -v gh >/dev/null 2>&1; then
   fi
 fi
 
-_run_with_timeout "$FUSION_TIMEOUT" codex exec \
-  --skip-git-repo-check \
-  --ephemeral \
-  --cd "$panel_cwd" \
-  --dangerously-bypass-approvals-and-sandbox \
-  -c tools.web_search=true \
-  -c "model_reasoning_effort=$effort" \
-  -o "$output_file" \
+# Build the arg list as an array (always non-empty — never expand a possibly-empty array
+# under `set -u`, which is unbound-variable-under-nounset on the old bash 3.2 that ships as
+# /bin/bash on macOS) so the optional --model override can be spliced in cleanly.
+codex_args=(
+  exec
+  --skip-git-repo-check
+  --ephemeral
+  --cd "$panel_cwd"
+  --dangerously-bypass-approvals-and-sandbox
+  -c tools.web_search=true
+  -c "model_reasoning_effort=$effort"
+)
+if [ -n "$model" ]; then
+  codex_args+=( --model "$model" )
+fi
+codex_args+=( -o "$output_file" )
+
+_run_with_timeout "$FUSION_TIMEOUT" codex "${codex_args[@]}" \
   - < "$prompt_file" \
   > "$scratch/stream.log" 2>&1
 
