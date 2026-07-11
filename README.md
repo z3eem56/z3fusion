@@ -1,8 +1,8 @@
-# Fusion-Fable
+# Fusion
 
-**Fuse a panel of frontier models into one Fable-tier answer.**
+**Fuse a panel of frontier models into one top-tier answer.**
 
-Fusion-Fable is a [Claude Code](https://claude.com/claude-code) skill that runs a hard question through a
+Fusion is a [Claude Code](https://claude.com/claude-code) skill that runs a hard question through a
 **panel → judge** pipeline. The same prompt is dispatched to several models *in parallel* — each answering
 independently with web search and bash, none seeing the others' work — and then the orchestrating
 Claude Code session (whichever model it is actually running as — Opus, Sonnet, Haiku, Fable, whatever
@@ -14,7 +14,7 @@ harvested, not manufactured: running the same prompt independently yields differ
 calls, and sources — even two cold runs of the *same* model diverge enough that synthesizing them beats
 running it once. So there are no contrived "lenses" or personas; every panelist gets the task verbatim and
 answers it straight. Fuse **two in-session Claude runs**, or **Claude + GPT-5.5** (via the `codex` CLI),
-into a result better than either alone — a Fable-tier fusion.
+into a result better than either alone.
 
 The panel itself is a fully composable list of **`model@runner`** slots (1-8 of them), not limited to any
 fixed roster: an in-session Claude subagent, GPT-5.5 via `codex`, Gemini via `agy`, a fully local model
@@ -23,10 +23,10 @@ running on your own machine through **Ollama** or **LM Studio** (zero API key), 
 and more) the moment `OPENROUTER_API_KEY` is set. The three panels below are a zero-config starting point,
 not the ceiling — see [**Bring your own model**](#bring-your-own-model) to compose anything beyond them.
 
-**Design reference.** Fusion-Fable's panel → judge shape is a local implementation of
+**Design reference.** Fusion's panel → judge shape is a local implementation of
 [OpenRouter's Fusion Router](https://openrouter.ai/docs/guides/routing/routers/fusion-router): its
 `analysis_models` array (1-8 models, any provider, run in parallel) judged/synthesized by one outer `model`
-is exactly what the fan-out + judge steps below do — the difference is Fusion-Fable dispatches every
+is exactly what the fan-out + judge steps below do — the difference is Fusion dispatches every
 panelist itself, locally, over CLI/API calls, so it works fully with **or without** an OpenRouter account.
 (OpenRouter also ships fusion as a hosted, server-side capability — its
 [Fusion plugin](https://openrouter.ai/docs/guides/features/plugins/fusion) — which is a different thing
@@ -94,8 +94,8 @@ reversed. That is a deliberate, stated design boundary, not a bug to work around
 ## Install
 
 ```bash
-git clone https://github.com/duolahypercho/fusion-fable.git
-cd fusion-fable
+git clone https://github.com/z3eem56/fusion.git
+cd fusion
 ./install.sh
 ```
 
@@ -221,7 +221,7 @@ install.sh                  copies the above into ~/.claude (hook copied but lef
 On the DRACO deep-research benchmark, [OpenRouter](https://openrouter.ai/docs/guides/routing/routers/fusion-router)
 found that fusing model answers consistently beats the individual models — and that a meaningful chunk of
 the lift comes from the *synthesis step itself*, not just from mixing architectures: two independent runs
-of one model, synthesized, beat that model run once. Fusion-Fable implements that same
+of one model, synthesized, beat that model run once. Fusion implements that same
 independence-then-judge pipeline locally in Claude Code.
 
 ## Cost & latency

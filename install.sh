@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — install the Fusion-Fable skill + slash commands into your Claude Code config.
+# install.sh — install the Fusion skill + slash commands into your Claude Code config.
 #
 # Copies:
 #   skills/fusion        -> $CLAUDE_DIR/skills/fusion
@@ -29,7 +29,7 @@ if [ -d "$HERE/hooks" ]; then
   chmod +x "$CLAUDE_DIR/hooks/"*.sh 2>/dev/null || true
 fi
 
-echo "✓ Installed Fusion-Fable into $CLAUDE_DIR"
+echo "✓ Installed Fusion into $CLAUDE_DIR"
 echo "    skills   : $CLAUDE_DIR/skills/fusion , $CLAUDE_DIR/skills/fusion-plan"
 echo "    commands : /fusion  /fusion-opus4.8  /fusion-gpt5.5  /fusion-gemini  /fusion-3  /fusion-plan"
 echo
