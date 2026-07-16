@@ -4,9 +4,9 @@ description: >-
   Produce a high-confidence, CONCISE implementation / architecture / strategy PLAN that follows the OMC
   plan system end to end. It first runs OMC's real requirements interview (auto-chains the `omc-plan`
   skill: one question at a time, explore-first, Analyst consult) to produce an initial plan in
-  `.omc/plans/`, then DEEPENS that plan with a 3-round ITERATIVE fusion loop — each round an Opus 4.8
+  `.omc/plans/`, then DEEPENS that plan with a 3-round ITERATIVE fusion loop — each round an the in-session Claude model
   panelist (Agent subagent) and a GPT-5.6 Sol panelist (via codex) critique/improve it IN PARALLEL and BLIND,
-  then Opus 4.8 (the orchestrator) judges and synthesizes one tighter plan that seeds the next round,
+  then the orchestrating session judges and synthesizes one tighter plan that seeds the next round,
   stopping early on convergence. Writes the final dense plan back to the same `.omc/plans/<slug>.md`, then
   offers the OMC handoff (`/omc-plan --review` → `/team` or `/ralph`). Use for high-stakes planning,
   architecture decisions, strategy calls, and hard debugging — especially when the user runs /plan or asks
@@ -21,7 +21,7 @@ the fusion panel deepens the resulting plan, and the output flows back into OMC'
 pipeline. The fusion panel replaces only the *plan-thinking* step; storage, format, the quality gate, and
 execution all stay on OMC's rails.
 
-**Hard rule (same as fusion): Opus 4.8 always judges and synthesizes. You are the judge — stay separate
+**Hard rule (same as fusion): the in-session Claude model always judges and synthesizes. You are the judge — stay separate
 from the panelists.** The Opus panelist is always a *spawned subagent*, never you.
 
 ## Step 0 — Requirements (pick the mode FIRST)
@@ -71,8 +71,8 @@ This skill targets the `claude-gpt5.6` panel. Check codex is present:
 command -v codex && codex --version
 ```
 
-- If `codex` is installed → run the full Opus 4.8 + GPT-5.6 Sol loop below.
-- If `codex` is **missing** → tell the user, then fall back to two independent Opus 4.8 panelists per round
+- If `codex` is installed → run the full the in-session Claude model + GPT-5.6 Sol loop below.
+- If `codex` is **missing** → tell the user, then fall back to two independent the in-session Claude model panelists per round
   (`claude-claude`) rather than failing. Note the downgrade and how to enable GPT-5.6 Sol (`npm i -g
   @openai/codex` + `codex login`).
 
@@ -112,7 +112,7 @@ round-R prompt. The only shared input across a round is the previous round's syn
 
 ### 2b. Launch BOTH panelists in ONE turn (parallel, blind)
 
-- **Opus 4.8 panelist** → `Agent` tool, `subagent_type: general-purpose`, `model: opus`, prompt = the
+- **the in-session Claude model panelist** → `Agent` tool, `subagent_type: general-purpose`, `model: opus`, prompt = the
   panelist prompt above. Spawn a **fresh** subagent each round. **Prefix the Agent prompt's first line with
   the literal marker `[FUSION-PANELIST]`** so spawn hooks recognize and skip fusion's own panelist spawns
   (otherwise the plan-nudge backstop would fire on them).
