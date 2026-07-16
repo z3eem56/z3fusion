@@ -2,16 +2,16 @@
 description: z3Fusion with a custom panel — pass --models <model@runner,...> :: <question> to compose any mix of models/providers/local runners, or omit --models to let detect_panel.sh recommend the richest legacy preset automatically
 argument-hint: "[--models <model@runner,...> ::] <your question>"
 ---
-Invoke the **fusion** skill on the task below. Unlike the four pinned presets (`/fusion-opus4.8`,
-`/fusion-gpt5.5`, `/fusion-gemini`, `/fusion-3`), this command lets the panel be composed freely instead of
+Invoke the **z3fusion** skill on the task below. Unlike the four pinned presets (`/z3fusion-claude`,
+`/z3fusion-gpt5.6`, `/z3fusion-gemini`, `/z3fusion-3`), this command lets the panel be composed freely instead of
 forcing one fixed legacy slug.
 
 **Parse `$ARGUMENTS` first, before doing anything else:**
 
 - If it starts with `--models` followed by a comma-separated list and then `::`, everything between
   `--models` and `::` is the panel spec; everything after `::` is the actual task (trim surrounding
-  whitespace off both pieces). Example: `--models opus@claude,llama3.3@ollama,deepseek/deepseek-v3.2@openrouter
-  :: Compare X and Y` → panel spec = `opus@claude,llama3.3@ollama,deepseek/deepseek-v3.2@openrouter`, task =
+  whitespace off both pieces). Example: `--models opus@claude,llama4@ollama,deepseek/deepseek-v4-pro@openrouter
+  :: Compare X and Y` → panel spec = `opus@claude,llama4@ollama,deepseek/deepseek-v4-pro@openrouter`, task =
   `Compare X and Y`.
 - Otherwise there is no `--models` prefix: the whole of `$ARGUMENTS` is the task, and the panel is not
   forced — run `bash <skill_dir>/scripts/detect_panel.sh` per the skill's own Step 0 and use whichever slug
@@ -28,12 +28,12 @@ forcing one fixed legacy slug.
   access against a throwaway copy of the workdir).
 - `model@agy` runs that model through `agy` / Antigravity under a pseudo-TTY (Gemini family today).
 - `model@ollama` runs a fully local model via the Ollama CLI/server — zero API key required, e.g.
-  `llama3.3@ollama` or `qwen2.5-coder@ollama`.
+  `llama4@ollama` or `qwen3.6-coder@ollama`.
 - `model@<provider>` for any other runner name dispatches through `scripts/run_panelist.sh`, which resolves
   it against a built-in OpenAI-compatible provider table (`openrouter`, `lmstudio`, `ollama-api`, `openai`,
   `groq`, `together`, `fireworks`, `deepseek`, `mistral`, `xai`, `google`) or a runner registered in
-  `~/.claude/fusion-runners.json`. OpenRouter alone proxies hundreds of models behind plain slug strings
-  with no CLI needed, e.g. `deepseek/deepseek-v3.2@openrouter`, `anthropic/claude-opus-4.8@openrouter`,
+  `~/.claude/z3fusion-runners.json`. OpenRouter alone proxies hundreds of models behind plain slug strings
+  with no CLI needed, e.g. `deepseek/deepseek-v4-pro@openrouter`, `anthropic/claude-opus-4.8@openrouter`,
   `meta-llama/llama-4-maverick@openrouter`, `x-ai/grok-4@openrouter`.
 
 Every slot becomes one blind, independent panelist under the same rules as the pinned presets: no "lenses",
@@ -43,11 +43,11 @@ to spawn it, so the pipeline can't be reversed regardless of how exotic the pane
 
 **Two example invocations:**
 
-- `/fusion --models opus@claude,llama3.3@ollama,deepseek/deepseek-v3.2@openrouter :: Compare Rust's async
+- `/z3fusion --models opus@claude,llama4@ollama,deepseek/deepseek-v4-pro@openrouter :: Compare Rust's async
   runtime story to Go's goroutines for a high-throughput ingestion service.` — three panelists: an
   in-session Claude subagent, a fully local Llama 3.3 running through Ollama (no API key), and DeepSeek V3.2
   routed through OpenRouter (needs `OPENROUTER_API_KEY`).
-- `/fusion Should we replace our internal REST gateway with gRPC for service-to-service calls?` — no
+- `/z3fusion Should we replace our internal REST gateway with gRPC for service-to-service calls?` — no
   `--models` prefix, so the panel is whatever `detect_panel.sh` recommends on this machine, falling back all
   the way to the two-independent-in-session-Claude-panelists preset if no external CLI/server/key is
   reachable.

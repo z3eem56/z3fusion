@@ -32,7 +32,7 @@ same independence-then-judge pipeline locally in Claude Code.
 one outer `model` is exactly what z3Fusion's fan-out + judge steps do — the difference is z3Fusion dispatches
 every panelist itself, locally, over CLI/API calls, so it works fully **with or without** an OpenRouter
 account. (OpenRouter also ships fusion as a hosted, server-side capability — its
-[z3Fusion plugin](https://openrouter.ai/docs/guides/features/plugins/fusion) — which is a different thing
+[z3Fusion plugin](https://openrouter.ai/docs/guides/features/plugins/z3fusion) — which is a different thing
 from the Fusion Router design above; an `openrouter` panel slot can optionally attach that plugin as an
 EXPERIMENTAL, opt-in path — see [Advanced: attach OpenRouter's own fusion plugin](#advanced-attach-openrouters-own-fusion-plugin).)
 
@@ -48,19 +48,19 @@ no fixed roster:
 | `agy` | The **Gemini family**, via the `agy` / Antigravity CLI (pseudo-TTY workaround for its print-mode bug) | `agy` CLI, keyring seeded |
 | `ollama` | **Any locally-pulled Ollama model** — zero API key, never leaves your machine | `ollama` CLI or local server |
 | `lmstudio` | A model loaded in **LM Studio**'s local server | LM Studio running (`localhost:1234`) |
-| `openrouter` | **Any model OpenRouter lists, from any provider** — Anthropic, OpenAI, Google, DeepSeek, Meta/Llama, Mistral, xAI, Qwen, and hundreds more, addressed as a plain slug like `deepseek/deepseek-v3.2` | `OPENROUTER_API_KEY` |
+| `openrouter` | **Any model OpenRouter lists, from any provider** — Anthropic, OpenAI, Google, DeepSeek, Meta/Llama, Mistral, xAI, Qwen, and hundreds more, addressed as a plain slug like `deepseek/deepseek-v4-pro` | `OPENROUTER_API_KEY` |
 | `openai`, `groq`, `together`, `fireworks`, `deepseek`, `mistral`, `xai`, `google` | That provider's own hosted API, direct | that provider's API key |
-| *(anything else)* | A runner **you register** — another HTTP provider or a bespoke local CLI — in `~/.claude/fusion-runners.json` | whatever you configure |
+| *(anything else)* | A runner **you register** — another HTTP provider or a bespoke local CLI — in `~/.claude/z3fusion-runners.json` | whatever you configure |
 
 A few concrete panels this makes possible:
 
 ```
-opus@claude,gpt-5.5@codex,gemini-3.1-pro@agy                              — the classic 3-model panel, spelled out
-opus@claude,llama3.3@ollama,deepseek/deepseek-v3.2@openrouter             — one hosted, one local, one OpenRouter
-qwen2.5@ollama,llama-4-maverick@openrouter,gpt-5.5@codex,gemini-3.1-pro@agy,claude@claude   — 5 panelists, 4 providers
+opus@claude,gpt-5.6@codex,gemini-3.1-pro@agy                              — the classic 3-model panel, spelled out
+opus@claude,llama4@ollama,deepseek/deepseek-v4-pro@openrouter             — one hosted, one local, one OpenRouter
+qwen3.6@ollama,llama-4-maverick@openrouter,gpt-5.6@codex,gemini-3.1-pro@agy,claude@claude   — 5 panelists, 4 providers
 ```
 
-Compose these with `--models <model@runner,...>` via the generic `/fusion` command, or just ask in prose
+Compose these with `--models <model@runner,...>` via the generic `/z3fusion` command, or just ask in prose
 ("run z3Fusion with a local Llama model and DeepSeek from OpenRouter on …"). `detect_panel.sh` (z3Fusion's
 Step 0) probes every runner reachable on your machine — CLIs on `PATH`, local servers, provider API keys in
 your environment — and recommends the richest panel automatically if you don't specify one.
@@ -73,7 +73,7 @@ reversed. That's a deliberate design boundary, not a bug to work around.
 ### Registering your own runner
 
 Anything not built in — another OpenAI-compatible HTTP endpoint (an internal proxy, vLLM, a self-hosted
-`llama.cpp` server), or a totally different local CLI — goes in `~/.claude/fusion-runners.json`:
+`llama.cpp` server), or a totally different local CLI — goes in `~/.claude/z3fusion-runners.json`:
 
 ```json
 {
@@ -99,7 +99,7 @@ Anything not built in — another OpenAI-compatible HTTP endpoint (an internal p
 - Entries here override a built-in of the same name, so you can point `openrouter` at a proxy, or swap
   which env var it reads.
 
-See `skills/fusion/scripts/providers.sh`'s header comment for the exact schema — that file is the source of
+See `skills/z3fusion/scripts/providers.sh`'s header comment for the exact schema — that file is the source of
 truth for it.
 
 ### Advanced: attach OpenRouter's own fusion plugin
@@ -118,10 +118,10 @@ defaults, not the ceiling:
 
 | Slug | Panel | Requires |
 | --- | --- | --- |
-| `opus4.8-4.8` | the **same prompt run twice** as 2 independent in-session Claude panelists → the session judges | nothing — works everywhere |
-| `opus4.8-gpt5.5` | in-session Claude + **GPT-5.5** (codex) in parallel → the session judges | the `codex` CLI |
-| `opus4.8-gemini3.1pro` | in-session Claude + **Gemini 3.1 Pro** (agy) in parallel → the session judges | the `agy` CLI |
-| `opus4.8-gpt5.5-gemini3.1pro` | in-session Claude + GPT-5.5 + Gemini 3.1 Pro in parallel → the session judges | `codex` + `agy` CLIs |
+| `claude-claude` | the **same prompt run twice** as 2 independent in-session Claude panelists → the session judges | nothing — works everywhere |
+| `claude-gpt5.6` | in-session Claude + **GPT-5.6 Sol** (codex) in parallel → the session judges | the `codex` CLI |
+| `claude-gemini3.1pro` | in-session Claude + **Gemini 3.1 Pro** (agy) in parallel → the session judges | the `agy` CLI |
+| `claude-gpt5.6-gemini3.1pro` | in-session Claude + GPT-5.6 Sol + Gemini 3.1 Pro in parallel → the session judges | `codex` + `agy` CLIs |
 
 `detect_panel.sh` auto-detects which panelist CLIs are installed and recommends the richest of these four,
 falling back gracefully when one is missing — a required CLI absent never aborts a run, it just drops that
@@ -130,12 +130,12 @@ panelist and notes the degradation.
 ## Install
 
 ```bash
-git clone https://github.com/z3eem56/fusion.git
-cd fusion
+git clone https://github.com/z3eem56/z3fusion.git
+cd z3fusion
 ./install.sh
 ```
 
-This copies the skill to `~/.claude/skills/fusion` and the slash commands to `~/.claude/commands`, then
+This copies the skill to `~/.claude/skills/z3fusion` and the slash commands to `~/.claude/commands`, then
 prints a full report of which panels and runners your machine can currently use — legacy presets, local
 Ollama/LM Studio reachability, and which provider API keys are set. Restart Claude Code (or run
 `/reload-skills`) afterward.
@@ -150,15 +150,15 @@ Four ways, all equivalent under the hood:
   > "Run this through z3Fusion: is it safe to `ALTER TABLE … ADD COLUMN` on a 200M-row Postgres table in prod?"
 - **Pinned slash commands** — force one of the four zero-config presets:
   ```
-  /fusion-opus4.8  does my JWT refresh-rotation design have a replay hole?
-  /fusion-gpt5.5   is git push --force-with-lease actually safe on a shared branch?
-  /fusion-gemini   is this migration script safe to run against a live replica?
-  /fusion-3        full 3-family panel (Claude + GPT-5.5 + Gemini 3.1 Pro)
+  /z3fusion-claude  does my JWT refresh-rotation design have a replay hole?
+  /z3fusion-gpt5.6   is git push --force-with-lease actually safe on a shared branch?
+  /z3fusion-gemini   is this migration script safe to run against a live replica?
+  /z3fusion-3        full 3-family panel (Claude + GPT-5.6 Sol + Gemini 3.1 Pro)
   ```
-- **Composable panel** — `/fusion --models <model@runner,...> :: <question>` to pick any mix of
-  models/providers/local runners yourself, or `/fusion <question>` with no `--models` to let
+- **Composable panel** — `/z3fusion --models <model@runner,...> :: <question>` to pick any mix of
+  models/providers/local runners yourself, or `/z3fusion <question>` with no `--models` to let
   `detect_panel.sh` recommend the richest preset automatically.
-- **Force a panel in prose** — "run the `opus4.8-gpt5.5` z3Fusion on …", or "z3Fusion this with a local Ollama
+- **Force a panel in prose** — "run the `claude-gpt5.6` z3Fusion on …", or "z3Fusion this with a local Ollama
   model and Grok from OpenRouter".
 
 ## What you get back
@@ -178,20 +178,20 @@ shape that audit trail takes depends on what you asked for:
   (non-obvious points raised by exactly one panelist), and **Blind spots** (what the whole panel missed) —
   followed by a final answer that follows *from* that synthesis, not one panelist's answer lightly edited.
 
-Every run is also written to a timestamped provenance file under `~/.claude/fusion-runs/` — raw panelist
+Every run is also written to a timestamped provenance file under `~/.claude/z3fusion-runs/` — raw panelist
 answers, the analysis, and the final answer — for auditing later.
 
-## Planning: `/fusion-plan` (iterative + OMC-integrated)
+## Planning: `/z3fusion-plan` (iterative + OMC-integrated)
 
-`/fusion-plan` applies the panel to **planning** specifically. Instead of one panel→judge pass, it runs the
+`/z3fusion-plan` applies the panel to **planning** specifically. Instead of one panel→judge pass, it runs the
 panel as an **iterative loop** and plugs into the **oh-my-claudecode (OMC)** plan system end to end:
 
-1. **Requirements** — *interactive* (you run `/fusion-plan` yourself): auto-chains OMC's `omc-plan`
+1. **Requirements** — *interactive* (you run `/z3fusion-plan` yourself): auto-chains OMC's `omc-plan`
    interview (one question at a time, explore-first, Analyst consult) → initial plan in
    `.omc/plans/<slug>.md`. *Non-interactive* (autonomous run, inside a sub-agent, or `--no-interview`): no
    interview — derives requirements from the existing story doc / plan context, so it never hangs waiting
    on an answer no one is there to give.
-2. **Deepen (3 rounds, seeded)** — each round an in-session Claude panelist and a GPT-5.5 panelist (via
+2. **Deepen (3 rounds, seeded)** — each round an in-session Claude panelist and a GPT-5.6 Sol panelist (via
    `codex`) independently critique-and-improve the current plan **in parallel and blind**; the session
    judges and synthesizes one tighter plan that seeds the next round. Stops early on `NO_MATERIAL_CHANGE`.
 3. **Write back** — the converged plan is written back to `.omc/plans/<slug>.md`, kept **concise but
@@ -199,26 +199,26 @@ panel as an **iterative loop** and plugs into the **oh-my-claudecode (OMC)** pla
 4. **Handoff** — offers the OMC quality gate (`/omc-plan --review`) → execution (`/team` or `/ralph`).
 
 ```
-/fusion-plan design the schema + flow for <feature>
+/z3fusion-plan design the schema + flow for <feature>
 ```
 
 It works best with OMC installed (falls back to a minimal inline interview without it) and needs the
-`codex` CLI for the GPT-5.5 half (otherwise it falls back to two independent Claude panelists per round).
+`codex` CLI for the GPT-5.6 Sol half (otherwise it falls back to two independent Claude panelists per round).
 Reserve it for high-stakes planning — it costs an interview + ~6 panelist runs + 3 judge passes.
 
 ### Optional backstop hook
 
-`hooks/fusion-plan-nudge.sh` is an optional `PreToolUse` hook (matcher `Agent|Task`). When the orchestrator
+`hooks/z3fusion-plan-nudge.sh` is an optional `PreToolUse` hook (matcher `Agent|Task`). When the orchestrator
 is about to delegate a non-trivial *implementation* task to a sub-agent, it injects an advisory reminder to
-run `/fusion-plan --no-interview` on it first. Advisory only (never blocks), de-dupes per task, skips
+run `/z3fusion-plan --no-interview` on it first. Advisory only (never blocks), de-dupes per task, skips
 z3Fusion's own panelist spawns. `install.sh` copies it to `~/.claude/hooks/` but does **not** enable it — opt
 in via `settings.json` (the installer prints the exact snippet).
 
 ## Requirements, per runner
 
 - **Claude Code**, any model — panelist subagents and the judge always inherit the orchestrating session's
-  own model. (The `opus4.8-*` slug names are historical/nominal, not a requirement to actually run Opus.)
-- `codex` runner: the [`codex` CLI](https://github.com/openai/codex), logged in to an account with GPT-5.5
+  own model. (The `claude-*` slug names mean "an in-session Claude subagent" — whichever model the session runs as.)
+- `codex` runner: the [`codex` CLI](https://github.com/openai/codex), logged in to an account with GPT-5.6 Sol
   access (tested against `codex-cli` 0.139). Runs against a throwaway copy of the current repo/workdir with
   trusted local access, so tools like `gh`, test runners, Docker, and SDK-managed toolchains behave like
   they do in your terminal, without writing back to the live checkout.
@@ -233,21 +233,21 @@ in via `settings.json` (the installer prints the exact snippet).
   (`localhost:1234`) — no API key.
 - `openrouter` / `openai` / `groq` / `together` / `fireworks` / `deepseek` / `mistral` / `xai` / `google`
   runners: the matching API key set in your environment (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, etc.).
-- Any custom runner: whatever you configured for it in `~/.claude/fusion-runners.json`.
+- Any custom runner: whatever you configured for it in `~/.claude/z3fusion-runners.json`.
 
 Every z3Fusion invocation uses its own temporary prompt/output directory, so concurrent runs — in different
 Claude Code sessions, or different panels in the same session — never read each other's panelist artifacts.
 Each panelist is bounded by a per-panelist timeout (`FUSION_TIMEOUT`, default 300s; there's no
 `timeout`/`gtimeout` on stock macOS, so runners wrap calls in a self-contained `perl` timeout helper).
 
-Only `opus4.8-4.8` is truly zero-setup among the legacy presets; everything else lights up once its
+Only `claude-claude` is truly zero-setup among the legacy presets; everything else lights up once its
 CLI/server/key is available — and nothing ever *has* to be installed, since z3Fusion degrades gracefully to
 whatever panel the machine can actually support.
 
 ## What's in here
 
 ```
-skills/fusion/
+skills/z3fusion/
   SKILL.md                  detect → preflight → blind fan-out → judge → grounded final → save
   scripts/
     _fusion_lib.sh          shared helpers: perl-based per-panelist timeout, have(), JSON content extraction
@@ -259,22 +259,22 @@ skills/fusion/
     run_gemini.sh           runs a Gemini-family panelist via agy (pseudo-TTY + transcript fallback)
     run_ollama.sh           runs a fully local Ollama panelist (CLI + REST fallback, zero API key)
     run_openai_compat.sh    runs any OpenAI-chat-completions-compatible HTTP panelist (OpenRouter, hosted APIs, local servers)
-    providers.sh            built-in provider table + ~/.claude/fusion-runners.json loader
-    save_run.sh             writes the timestamped provenance .md to ~/.claude/fusion-runs/
+    providers.sh            built-in provider table + ~/.claude/z3fusion-runners.json loader
+    save_run.sh             writes the timestamped provenance .md to ~/.claude/z3fusion-runs/
   references/
     panel.md                why independent parallel runs (no lenses) — the panel mechanism
     judge_rubric.md         Track A (merge & verify) / Track B (structured synthesis) rubric
-skills/fusion-plan/
+skills/z3fusion-plan/
   SKILL.md                  OMC interview → 3-round seeded panel → concise .omc/plans/ → review/execute
 commands/
-  fusion.md                 /fusion          (composable --models <model@runner,...> panel, any provider)
-  fusion-opus4.8.md         /fusion-opus4.8  (pinned opus4.8-4.8 panel)
-  fusion-gpt5.5.md          /fusion-gpt5.5   (pinned opus4.8-gpt5.5 panel)
-  fusion-gemini.md          /fusion-gemini   (pinned opus4.8-gemini3.1pro panel)
-  fusion-3.md               /fusion-3        (pinned full opus4.8-gpt5.5-gemini3.1pro panel)
-  fusion-plan.md            /fusion-plan     (OMC-integrated iterative planning; reuses fusion's run_codex.sh)
+  z3fusion.md                 /z3fusion          (composable --models <model@runner,...> panel, any provider)
+  z3fusion-claude.md         /z3fusion-claude  (pinned claude-claude panel)
+  z3fusion-gpt5.6.md          /z3fusion-gpt5.6   (pinned claude-gpt5.6 panel)
+  z3fusion-gemini.md          /z3fusion-gemini   (pinned claude-gemini3.1pro panel)
+  z3fusion-3.md               /z3fusion-3        (pinned full claude-gpt5.6-gemini3.1pro panel)
+  z3fusion-plan.md            /z3fusion-plan     (OMC-integrated iterative planning; reuses z3fusion's run_codex.sh)
 hooks/
-  fusion-plan-nudge.sh      optional PreToolUse backstop (not auto-enabled) — nudges /fusion-plan on spawn
+  z3fusion-plan-nudge.sh      optional PreToolUse backstop (not auto-enabled) — nudges /z3fusion-plan on spawn
 install.sh                  copies the above into ~/.claude (hook copied but left disabled)
 ```
 

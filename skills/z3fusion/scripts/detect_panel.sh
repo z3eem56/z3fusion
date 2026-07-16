@@ -7,9 +7,9 @@
 # neither needs a CLI check.
 #
 # This script does two things now:
-#   1. (legacy, unchanged logic) Probes just the two original external panelist CLIs — GPT-5.5 via
+#   1. (legacy, unchanged logic) Probes just the two original external panelist CLIs — GPT-5.6 Sol via
 #      codex, Gemini 3.1 Pro via agy / Antigravity — and prints a final `SLUG=...` line the orchestrator
-#      greps for. This is kept byte-for-byte compatible: same 4 possible SLUG values, same precedence,
+#      greps for. Same shape as always: 4 possible SLUG values (claude-claude, claude-gpt5.6, claude-gemini3.1pro, claude-gpt5.6-gemini3.1pro), same precedence,
 #      so existing commands/*.md files that grep for SLUG= keep working unmodified.
 #   2. (new) ALSO probes every other runner the generic dispatcher (run_panelist.sh) can reach — local
 #      runtimes (ollama, LM Studio) and hosted OpenAI-compat providers gated on an API key env var — and
@@ -47,14 +47,14 @@ have agy   && agy_ok=true
 echo "panelist availability (an in-session Claude subagent is always a panelist; the orchestrating"
 echo "session is always the judge, via Agent subagents):"
 echo "  claude   : yes (Agent subagents — always available)"
-printf "  gpt5.5   : %s (codex CLI)\n"      "$([ "$codex_ok" = true ] && echo yes || echo NO)"
+printf "  gpt5.6   : %s (codex CLI)\n"      "$([ "$codex_ok" = true ] && echo yes || echo NO)"
 printf "  gemini3.1pro : %s (agy CLI)\n"    "$([ "$agy_ok"   = true ] && echo yes || echo NO)"
 echo
 
-if   $codex_ok && $agy_ok; then slug="opus4.8-gpt5.5-gemini3.1pro"
-elif $agy_ok;              then slug="opus4.8-gemini3.1pro"
-elif $codex_ok;            then slug="opus4.8-gpt5.5"
-else                            slug="opus4.8-4.8"
+if   $codex_ok && $agy_ok; then slug="claude-gpt5.6-gemini3.1pro"
+elif $agy_ok;              then slug="claude-gemini3.1pro"
+elif $codex_ok;            then slug="claude-gpt5.6"
+else                            slug="claude-claude"
 fi
 
 echo "recommended panel (legacy 4-preset system): $slug"
@@ -107,10 +107,10 @@ printf "  %-12s %-4s  %s\n" "ollama-api" "$([ "$ollama_ok" = true ] && echo yes 
 echo
 
 echo "custom panel example (any mix, not limited to the 4 legacy slugs):"
-echo "  --models opus@claude,gpt-5.5@codex,llama3.3@ollama,deepseek/deepseek-v3.2@openrouter"
+echo "  --models opus@claude,gpt-5.6@codex,llama4@ollama,deepseek/deepseek-v4-pro@openrouter"
 echo
 echo "register more runners (custom HTTP providers or non-HTTP command templates) in:"
-echo "  ~/.claude/fusion-runners.json   (see providers.sh's header comment for the exact shape)"
+echo "  ~/.claude/z3fusion-runners.json   (see providers.sh's header comment for the exact shape)"
 echo
 
 # Legacy grep target — keep this line last and in this exact "SLUG=..." shape.

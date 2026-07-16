@@ -42,7 +42,7 @@ if ! have agy; then
   exit 127
 fi
 
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/fusion-gemini.XXXXXX")"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/z3fusion-gemini.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
 ts_marker="$scratch/.t"; : > "$ts_marker"   # everything agy writes after this is "newer"
 

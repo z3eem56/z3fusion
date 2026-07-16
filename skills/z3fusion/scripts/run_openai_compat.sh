@@ -2,8 +2,8 @@
 # run_openai_compat.sh — generic runner for ANY OpenAI-chat-completions-compatible HTTP
 # endpoint. This is what makes "any model, any provider" real: OpenRouter alone proxies
 # hundreds of models across every major provider using plain model-slug strings like
-# "anthropic/claude-opus-4.8", "deepseek/deepseek-v3.2", "meta-llama/llama-4-maverick",
-# "x-ai/grok-4", "qwen/qwen3-max" — no CLI needed for any of them. Also covers local
+# "anthropic/claude-opus-4.8", "deepseek/deepseek-v4-pro", "meta-llama/llama-4-maverick",
+# "x-ai/grok-4", "qwen/qwen3.7-max" — no CLI needed for any of them. Also covers local
 # no-auth servers (LM Studio, vLLM, llama.cpp server, text-generation-webui, koboldcpp
 # OpenAI-compat mode) and every hosted OpenAI-compatible API (Groq, Together, Fireworks,
 # DeepSeek, Mistral, xAI, Google's OpenAI-compat endpoint, OpenAI itself, ...).
@@ -99,7 +99,7 @@ if [ -n "$api_key_env" ]; then
   fi
 fi
 
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/fusion-openai-compat.XXXXXX")"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/z3fusion-openai-compat.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
 
 body_file="$scratch/body.json"

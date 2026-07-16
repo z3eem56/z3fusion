@@ -36,16 +36,16 @@ depends on which models, how many, or which providers end up in the panel.
 
 Four presets exist as convenience defaults, not as the boundary of what's possible:
 
-- `opus4.8-4.8` — the **same prompt run twice** as two independent in-session Claude panelists (Agent
+- `claude-claude` — the **same prompt run twice** as two independent in-session Claude panelists (Agent
   subagents), then judged. Same model, two cold runs.
-- `opus4.8-gpt5.5` — an in-session Claude panelist and GPT-5.5 (codex) answer **in parallel**, then judged.
-- `opus4.8-gemini3.1pro` — an in-session Claude panelist and Gemini 3.1 Pro (agy) answer **in parallel**,
+- `claude-gpt5.6` — an in-session Claude panelist and GPT-5.6 Sol (codex) answer **in parallel**, then judged.
+- `claude-gemini3.1pro` — an in-session Claude panelist and Gemini 3.1 Pro (agy) answer **in parallel**,
   then judged.
-- `opus4.8-gpt5.5-gemini3.1pro` — an in-session Claude panelist, GPT-5.5, and Gemini 3.1 Pro answer in
+- `claude-gpt5.6-gemini3.1pro` — an in-session Claude panelist, GPT-5.6 Sol, and Gemini 3.1 Pro answer in
   parallel, then judged.
 
 These four are legacy presets, kept for convenience — not a ceiling. Any other composition is equally
-valid: for example, a custom panel of `@claude` (in-session), `gpt-5.5@codex`, and `llama3.3@ollama` mixes
+valid: for example, a custom panel of `@claude` (in-session), `gpt-5.6@codex`, and `llama4@ollama` mixes
 a hosted frontier model with a fully local, zero-API-key model running on the user's own machine — useful
 when part of the question shouldn't leave the box, or when a specific model outside the four presets is
 the right fit.

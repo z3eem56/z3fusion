@@ -2,7 +2,7 @@
 # fusion-plan-nudge.sh — PreToolUse backstop for the Agent/Task tool.
 #
 # When the orchestrator is about to spawn a sub-agent for a NON-TRIVIAL implementation task, inject an
-# advisory reminder to plan it first via `/fusion-plan --no-interview` (requirements from the story doc /
+# advisory reminder to plan it first via `/z3fusion-plan --no-interview` (requirements from the story doc /
 # current plan, never an interview). Advisory only: never blocks, never denies. Fail-open on any error.
 #
 # Wired in settings.local.json as a PreToolUse hook with matcher "Agent|Task".
@@ -33,7 +33,7 @@ impl_re='implement|build|create |write the|add (a|the|support|an)|fix |bug|refac
 printf '%s' "$low" | grep -Eq "$impl_re" || exit 0
 
 # Dedupe: nudge at most once per distinct task per session.
-dir="${TMPDIR:-/tmp}/fusion-plan-nudge"
+dir="${TMPDIR:-/tmp}/z3fusion-plan-nudge"
 mkdir -p "$dir" 2>/dev/null
 key="$(printf '%s|%s' "$agent" "$(printf '%s' "$prompt" | head -c 200)" | sha1sum 2>/dev/null | cut -d' ' -f1)"
 marker="$dir/${session}.${key}"
@@ -42,7 +42,7 @@ if [ -n "$key" ]; then
   : > "$marker" 2>/dev/null
 fi
 
-msg='⟡ fusion-plan backstop: about to delegate an implementation task. If it is NON-TRIVIAL (real logic/architecture, "wrong is expensive") and not planned yet, FIRST run `/fusion-plan --no-interview` on it — derive requirements from the story doc / current plan, do NOT interview. Skip if the task is trivial or already planned.'
+msg='⟡ fusion-plan backstop: about to delegate an implementation task. If it is NON-TRIVIAL (real logic/architecture, "wrong is expensive") and not planned yet, FIRST run `/z3fusion-plan --no-interview` on it — derive requirements from the story doc / current plan, do NOT interview. Skip if the task is trivial or already planned.'
 
 jq -n --arg ctx "$msg" '{hookSpecificOutput:{hookEventName:"PreToolUse", additionalContext:$ctx}}' 2>/dev/null
 exit 0

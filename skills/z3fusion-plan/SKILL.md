@@ -1,11 +1,11 @@
 ---
-name: fusion-plan
+name: z3fusion-plan
 description: >-
   Produce a high-confidence, CONCISE implementation / architecture / strategy PLAN that follows the OMC
   plan system end to end. It first runs OMC's real requirements interview (auto-chains the `omc-plan`
   skill: one question at a time, explore-first, Analyst consult) to produce an initial plan in
   `.omc/plans/`, then DEEPENS that plan with a 3-round ITERATIVE fusion loop — each round an Opus 4.8
-  panelist (Agent subagent) and a GPT-5.5 panelist (via codex) critique/improve it IN PARALLEL and BLIND,
+  panelist (Agent subagent) and a GPT-5.6 Sol panelist (via codex) critique/improve it IN PARALLEL and BLIND,
   then Opus 4.8 (the orchestrator) judges and synthesizes one tighter plan that seeds the next round,
   stopping early on convergence. Writes the final dense plan back to the same `.omc/plans/<slug>.md`, then
   offers the OMC handoff (`/omc-plan --review` → `/team` or `/ralph`). Use for high-stakes planning,
@@ -32,7 +32,7 @@ from the panelists.** The Opus panelist is always a *spawned subagent*, never yo
   executing a larger plan; running inside a spawned sub-agent; or you otherwise cannot reach a human who
   will answer. **This is the default during plan execution.**
 - **Interactive** only when a human is clearly present and able to answer right now — typically the user
-  typed `/fusion-plan ...` directly in the main session at the start of a planning session.
+  typed `/z3fusion-plan ...` directly in the main session at the start of a planning session.
 
 ### Non-interactive mode (autonomous / sub-agent / `--no-interview`)
 
@@ -65,22 +65,22 @@ Skill("oh-my-claudecode:omc-plan")   # pass the user's request; do NOT pass --co
 
 ## Step 1 — Preconditions
 
-This skill targets the `opus4.8-gpt5.5` panel. Check codex is present:
+This skill targets the `claude-gpt5.6` panel. Check codex is present:
 
 ```bash
 command -v codex && codex --version
 ```
 
-- If `codex` is installed → run the full Opus 4.8 + GPT-5.5 loop below.
+- If `codex` is installed → run the full Opus 4.8 + GPT-5.6 Sol loop below.
 - If `codex` is **missing** → tell the user, then fall back to two independent Opus 4.8 panelists per round
-  (`opus4.8-4.8`) rather than failing. Note the downgrade and how to enable GPT-5.5 (`npm i -g
+  (`claude-claude`) rather than failing. Note the downgrade and how to enable GPT-5.6 Sol (`npm i -g
   @openai/codex` + `codex login`).
 
 Read the shared references once (they live in the sibling skill):
 
 ```bash
-cat ~/.claude/skills/fusion/references/panel.md
-cat ~/.claude/skills/fusion/references/judge_rubric.md
+cat ~/.claude/skills/z3fusion/references/panel.md
+cat ~/.claude/skills/z3fusion/references/judge_rubric.md
 ```
 
 Honor `panel.md`: every panelist gets the same input **verbatim**, no assigned "lenses" or personas.
@@ -116,11 +116,11 @@ round-R prompt. The only shared input across a round is the previous round's syn
   panelist prompt above. Spawn a **fresh** subagent each round. **Prefix the Agent prompt's first line with
   the literal marker `[FUSION-PANELIST]`** so spawn hooks recognize and skip fusion's own panelist spawns
   (otherwise the plan-nudge backstop would fire on them).
-- **GPT-5.5 panelist** → write the prompt to a temp file and run codex at **high** effort:
+- **GPT-5.6 Sol panelist** → write the prompt to a temp file and run codex at **high** effort:
   ```bash
-  printf '%s' "$PROMPT" > /tmp/fusion_plan_codex_r${R}_prompt.txt
-  bash ~/.claude/skills/fusion/scripts/run_codex.sh \
-    /tmp/fusion_plan_codex_r${R}_prompt.txt /tmp/fusion_plan_codex_r${R}_out.md high
+  printf '%s' "$PROMPT" > /tmp/z3fusion_plan_codex_r${R}_prompt.txt
+  bash ~/.claude/skills/z3fusion/scripts/run_codex.sh \
+    /tmp/z3fusion_plan_codex_r${R}_prompt.txt /tmp/z3fusion_plan_codex_r${R}_out.md high
   ```
   Read the out file once it finishes. Exit 127 / missing-codex → apply the Step 1 fallback.
 
@@ -158,7 +158,7 @@ in the OMC standard format:
   and "mutation needs readback / cross-service needs same-run proof".
 - **ADR** (compact) — Decision · Drivers · Alternatives rejected (+ why) · Consequences. A few lines each.
 - **Sub-task flags (only if the plan decomposes into multiple sub-tasks/stories):** mark each NON-TRIVIAL
-  sub-task inline with `⟡ DEEP-PLAN: /fusion-plan --no-interview before implementing`. This is how
+  sub-task inline with `⟡ DEEP-PLAN: /z3fusion-plan --no-interview before implementing`. This is how
   autonomous execution knows where to trigger a per-task panel (requirements will come from this plan +
   any story doc, non-interactively). Leave trivial sub-tasks unflagged — don't flag everything.
 
@@ -173,7 +173,7 @@ Present in chat:
 1. **Final Plan** — the dense plan inline (or a tight summary + the `.omc/plans/<slug>.md` path if long).
 2. **Convergence trail** — 1–2 lines per round: interview seed → v1 → v2 → v3, what each round changed
    (decisions added / removed / corrected). Evidence the iteration earned its tokens.
-3. **Panel line** — panel slug (`opus4.8-gpt5.5`), rounds run, early-stop or not, any downgrade.
+3. **Panel line** — panel slug (`claude-gpt5.6`), rounds run, early-stop or not, any downgrade.
 
 Then **offer** the OMC handoff — do not auto-run execution without the user's go-ahead:
 
@@ -193,4 +193,4 @@ integrate only through the shared `.omc/plans/*.md` artifact and by invoking the
 One run is the OMC interview + ~6 panelist runs + 3 judge passes — several× a single plan, as slow as the
 slowest panelist per round, plus interactive interview time up front. That is the deliberate trade for
 high-stakes planning where a wrong plan is expensive. For trivial or low-stakes planning, run plain
-`/omc-plan` (or `/fusion-gpt5.5`) instead — don't reach for the full chain when one would obviously do.
+`/omc-plan` (or `/z3fusion-gpt5.6`) instead — don't reach for the full chain when one would obviously do.

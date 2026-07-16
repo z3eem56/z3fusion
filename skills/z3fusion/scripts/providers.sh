@@ -16,17 +16,17 @@
 #     PROVIDER_EXTRA_JSON   - raw JSON object string to shallow-merge into the request body,
 #                              or "" if none (see run_openai_compat.sh for how it's used)
 #   Returns 0 if the runner name is recognized (built-in table or a user override/addition
-#   from ~/.claude/fusion-runners.json), 1 if not recognized.
+#   from ~/.claude/z3fusion-runners.json), 1 if not recognized.
 #
 #   NOTE: provider_lookup ONLY ever inspects the top-level "providers" object of
-#   fusion-runners.json (see shape below). It deliberately does NOT look at "custom" —
+#   z3fusion-runners.json (see shape below). It deliberately does NOT look at "custom" —
 #   those are non-HTTP shell-command templates, and run_panelist.sh checks that table
 #   itself, directly, only after provider_lookup here has already returned 1. Matching a
 #   "custom" entry from inside provider_lookup would make the caller try to POST to it as
 #   if it were an HTTP endpoint, which is wrong.
 #
 # ---------------------------------------------------------------------------------------
-# ~/.claude/fusion-runners.json (optional, user-editable; this comment block is the only
+# ~/.claude/z3fusion-runners.json (optional, user-editable; this comment block is the only
 # spec for its shape — there is no separate schema doc):
 #
 #   {
@@ -59,7 +59,14 @@
 # an associative array (`declare -A` is bash-4+ only, and stock /bin/bash on macOS is still
 # 3.2 — see the identical note in run_codex.sh).
 
-FUSION_RUNNERS_JSON="${FUSION_RUNNERS_JSON:-$HOME/.claude/fusion-runners.json}"
+# Prefer the rebranded config; fall back to the pre-rebrand filename so existing setups keep working.
+if [ -z "${FUSION_RUNNERS_JSON:-}" ]; then
+  if [ -f "$HOME/.claude/z3fusion-runners.json" ] || [ ! -f "$HOME/.claude/fusion-runners.json" ]; then
+    FUSION_RUNNERS_JSON="$HOME/.claude/z3fusion-runners.json"
+  else
+    FUSION_RUNNERS_JSON="$HOME/.claude/fusion-runners.json"
+  fi
+fi
 
 # Python fallback (same as _fusion_lib.sh, duplicated because this file is sourced standalone):
 # Windows installs often expose only `python`, not `python3`.
@@ -101,7 +108,7 @@ provider_lookup() {
     found=0
   fi
 
-  # --- User overrides/additions from ~/.claude/fusion-runners.json ("providers" only) ----
+  # --- User overrides/additions from ~/.claude/z3fusion-runners.json ("providers" only) ----
   if [ -f "$FUSION_RUNNERS_JSON" ]; then
     local user_out
     user_out="$(NAME="$name" JSON_FILE="$FUSION_RUNNERS_JSON" "$FUSION_PY" - <<'PYEOF'

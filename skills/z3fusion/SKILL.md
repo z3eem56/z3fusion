@@ -1,5 +1,5 @@
 ---
-name: fusion
+name: z3fusion
 description: >-
   Answer a hard question by fanning it out to a PANEL of models running in parallel — each answering
   independently with web search and bash, none seeing the others' work — then having the orchestrating
@@ -10,14 +10,14 @@ description: >-
   fully local Ollama models, a local LM Studio / vLLM / any OpenAI-compatible server, or literally any
   OpenRouter-listed model from any provider (Anthropic, OpenAI, Google, DeepSeek, Meta/Llama, Mistral,
   xAI/Grok, Qwen, and more) via an OPENROUTER_API_KEY. Four legacy slugs remain as zero-config presets
-  (opus4.8-4.8, opus4.8-gpt5.5, opus4.8-gemini3.1pro, opus4.8-gpt5.5-gemini3.1pro) but they are convenience
+  (claude-claude, claude-gpt5.6, claude-gemini3.1pro, claude-gpt5.6-gemini3.1pro) but they are convenience
   defaults, not the ceiling — pass a custom "--models" panel string of comma-separated model@runner slots
   instead. The orchestrating Claude Code session (whichever model it is actually running as) always judges
   and writes the final answer — the pipeline can't be reversed, because external panelist CLIs/APIs have no
   way to call back into this session. Runs on local CLI subscriptions or fully local models with no metered
   API required for the legacy presets, and can also reach metered provider APIs when configured. Saves a
   timestamped provenance .md per run, and answers in French by default. Use this whenever the user asks to
-  "run it through z3Fusion", says /fusion, wants a multi-model / panel / ensemble answer, wants a question
+  "run it through z3Fusion", says /z3fusion, wants a multi-model / panel / ensemble answer, wants a question
   cross-checked across models, or wants a higher-confidence answer with consensus and blind spots surfaced —
   even if they don't say "fusion". General-purpose: any topic (research, law, strategy, technical,
   personal). Best for high-stakes research, design calls, and debugging where being confidently wrong is
@@ -63,7 +63,7 @@ path is opt-in, unverified against real provider responses in this environment, 
 experimental; it is not needed for, and does not replace, the plain per-model path above.
 
 Throughout, `<skill_dir>` is the directory containing this SKILL.md (when installed:
-`~/.claude/skills/fusion`). Write the user's question **verbatim** to `/tmp/fusion_question.txt` first —
+`~/.claude/skills/z3fusion`). Write the user's question **verbatim** to `/tmp/z3fusion_question.txt` first —
 several steps reuse it.
 
 ## Step 0 — Pick the panel
@@ -80,33 +80,33 @@ so you can see everything else that is composable beyond those 4 presets.
 
 | Slug | Panel | Requires |
 | --- | --- | --- |
-| `opus4.8-4.8` | the same prompt run twice as 2 independent in-session Claude panelists | nothing — always available |
-| `opus4.8-gpt5.5` | in-session Claude + GPT-5.5 in parallel | `codex` CLI |
-| `opus4.8-gemini3.1pro` | in-session Claude + Gemini 3.1 Pro in parallel | `agy` CLI |
-| `opus4.8-gpt5.5-gemini3.1pro` | in-session Claude + GPT-5.5 + Gemini 3.1 Pro in parallel | `codex` + `agy` CLIs |
+| `claude-claude` | the same prompt run twice as 2 independent in-session Claude panelists | nothing — always available |
+| `claude-gpt5.6` | in-session Claude + GPT-5.6 Sol in parallel | `codex` CLI |
+| `claude-gemini3.1pro` | in-session Claude + Gemini 3.1 Pro in parallel | `agy` CLI |
+| `claude-gpt5.6-gemini3.1pro` | in-session Claude + GPT-5.6 Sol + Gemini 3.1 Pro in parallel | `codex` + `agy` CLIs |
 
 Beyond these 4 presets, compose an ad hoc panel with `--models` — a comma-separated list of `model@runner`
 slots, one per panelist. A bare model name with no `@` always means an in-session Claude Agent-tool
 subagent (`opus` and `opus@claude` mean the same thing); every other slot's `runner` half selects how that
 panelist is invoked (see Step 2). A few concrete examples, mixing local and cloud:
 
-- `--models opus@claude,gpt-5.5@codex,gemini-3.1-pro@agy` — the legacy 3-model panel, spelled out
+- `--models opus@claude,gpt-5.6@codex,gemini-3.1-pro@agy` — the legacy 3-model panel, spelled out
   explicitly instead of via a slug.
-- `--models opus@claude,llama3.3@ollama,deepseek/deepseek-v3.2@openrouter` — one in-session Claude
+- `--models opus@claude,llama4@ollama,deepseek/deepseek-v4-pro@openrouter` — one in-session Claude
   panelist, one fully local Ollama model (no API key), one OpenRouter-routed frontier model.
-- `--models qwen2.5@ollama,llama-4-maverick@openrouter,gpt-5.5@codex,gemini-3.1-pro@agy,claude@claude` — a
+- `--models qwen3.6@ollama,llama-4-maverick@openrouter,gpt-5.6@codex,gemini-3.1-pro@agy,claude@claude` — a
   5-slot panel spanning a local model, OpenRouter, codex, agy, and in-session Claude in one call.
 
-If the user named a slug (or used a pinned `/fusion-*` command) or passed `--models`, honor it — but if a
+If the user named a slug (or used a pinned `/z3fusion-*` command) or passed `--models`, honor it — but if a
 required CLI/server/key for a given slot is missing, say so, drop that panelist, and fall back to the
 next-richest option (Step 2's graceful-degradation rules) rather than failing outright. Otherwise use the
 detector's recommendation. Register additional local/remote runners for `--models` to use in
-`~/.claude/fusion-runners.json` (see `scripts/providers.sh` for its exact shape).
+`~/.claude/z3fusion-runners.json` (see `scripts/providers.sh` for its exact shape).
 
 ## Step 1 — Preflight (informational, never a gate)
 
 ```bash
-bash <skill_dir>/scripts/preflight.sh <SLUG> /tmp/fusion_question.txt
+bash <skill_dir>/scripts/preflight.sh <SLUG> /tmp/z3fusion_question.txt
 ```
 
 Show its output to the user (rough token/call estimate + Codex cap reminder), then proceed. It never
@@ -123,26 +123,26 @@ task. (Answer in the user's question language.)
 Launch **all panelists in a single turn** so they run concurrently:
 
 - **In-session Claude panelist(s)** (any slot with no `@`, or explicitly `@claude`) → the `Agent` tool,
-  `subagent_type: general-purpose` (web + bash built in). For `opus4.8-4.8`, spawn **two** independent
+  `subagent_type: general-purpose` (web + bash built in). For `claude-claude`, spawn **two** independent
   Claude subagents with the *same* prompt — two cold runs. For every other panel, spawn **one** Claude
   subagent per `@claude` slot alongside the other panelists. Spawn them in the same message so they run at
-  once. When each returns, write its answer to a temp file for provenance: `/tmp/fusion_opusA.md` (and
-  `/tmp/fusion_opusB.md` for a second Claude run, etc.).
+  once. When each returns, write its answer to a temp file for provenance: `/tmp/z3fusion_opusA.md` (and
+  `/tmp/z3fusion_opusB.md` for a second Claude run, etc.).
 - **Every other panelist slot** (`codex`, `agy`, `ollama`, `openrouter`, `lmstudio`, or any custom runner
-  registered in `~/.claude/fusion-runners.json`) → write its prompt to a temp file, then call the generic
+  registered in `~/.claude/z3fusion-runners.json`) → write its prompt to a temp file, then call the generic
   dispatcher:
   ```bash
-  fusion_run_dir="$(mktemp -d "${TMPDIR:-/tmp}/fusion-panel.XXXXXX")"
+  fusion_run_dir="$(mktemp -d "${TMPDIR:-/tmp}/z3fusion-panel.XXXXXX")"
   bash <skill_dir>/scripts/run_panelist.sh <runner> <model> "$fusion_run_dir/<runner>_prompt.md" "$fusion_run_dir/<runner>_out.md" [effort]
   ```
   Allocate one unique `fusion_run_dir` per z3Fusion invocation and put every prompt/output file for that
-  invocation under it. Never use fixed paths like `/tmp/fusion_codex_prompt.txt` or
-  `/tmp/fusion_codex_out.md`; multiple Claude Code sessions can run z3Fusion concurrently, and fixed names let
+  invocation under it. Never use fixed paths like `/tmp/z3fusion_codex_prompt.txt` or
+  `/tmp/z3fusion_codex_out.md`; multiple Claude Code sessions can run z3Fusion concurrently, and fixed names let
   one run read another run's prompt or answer.
 
   `run_panelist.sh` is the single entry point every non-Claude panelist goes through; it dispatches to the
   right underlying runner for you:
-  - `codex` runner (GPT family, or whichever model the slot names, e.g. `gpt-5.5@codex`) → copies the
+  - `codex` runner (GPT family, or whichever model the slot names, e.g. `gpt-5.6@codex`) → copies the
     current repo/workdir to a throwaway directory, then launches `codex exec` with full local access
     against that copy. This preserves the live checkout while letting the codex panelist use the same local
     tools and keychain-backed credentials as a trusted terminal Codex run. `-o` makes codex write only its
@@ -157,10 +157,10 @@ Launch **all panelists in a single turn** so they run concurrently:
     on stdin and stripping ANSI/control bytes from the captured output; falls back to the local
     `http://localhost:11434/api/chat` REST endpoint if the CLI is absent or produced empty output.
   - any other runner name (`openrouter`, `lmstudio`, `openai`, `groq`, `together`, `fireworks`, `deepseek`,
-    `mistral`, `xai`, `google`, or a custom entry from `~/.claude/fusion-runners.json`) → a generic
+    `mistral`, `xai`, `google`, or a custom entry from `~/.claude/z3fusion-runners.json`) → a generic
     OpenAI-chat-completions-compatible HTTP call, using that provider's base URL and (if required) API key
     from `providers.sh`. This is what makes "any OpenRouter-listed model" real: point a slot at
-    `<model>@openrouter` (e.g. `deepseek/deepseek-v3.2@openrouter`, `meta-llama/llama-4-maverick@openrouter`,
+    `<model>@openrouter` (e.g. `deepseek/deepseek-v4-pro@openrouter`, `meta-llama/llama-4-maverick@openrouter`,
     `x-ai/grok-4@openrouter`) with `OPENROUTER_API_KEY` set, and it is a plain per-model HTTP call — this is
     the robust, verified path for "any provider" and needs nothing beyond a standard chat-completions body.
     `providers.sh` also carries an EXPERIMENTAL `extra_json` field (empty by default) that gets merged
@@ -177,15 +177,15 @@ Launch **all panelists in a single turn** so they run concurrently:
   identically to every runner, built-in or custom.
 
 Keep panelists isolated: never paste one panelist's output into another's prompt. The orchestrating session
-(you) is the judge and must stay separate from the panelists — for `opus4.8-4.8`, or any custom panel with
+(you) is the judge and must stay separate from the panelists — for `claude-claude`, or any custom panel with
 multiple `@claude` slots, every Claude panelist is a spawned subagent, not you, so your synthesis reads all
 answers fresh.
 
 **Graceful degradation.** If a panelist exits non-zero, remove it, record a one-line degradation note (e.g.
-`gemini dropped: agy empty -> opus4.8-gpt5.5`, or `llama3.3@ollama dropped: ollama unreachable (127)`), and
+`gemini dropped: agy empty -> claude-gpt5.6`, or `llama4@ollama dropped: ollama unreachable (127)`), and
 continue with what's left. For the legacy presets, the fallback order is:
-`opus4.8-gpt5.5-gemini3.1pro` → `opus4.8-gpt5.5` → ultimate `opus4.8-4.8` (two independent in-session Claude
-runs, zero external CLI). For `opus4.8-gemini3.1pro`, dropping Gemini falls back to `opus4.8-4.8` (spawn a
+`claude-gpt5.6-gemini3.1pro` → `claude-gpt5.6` → ultimate `claude-claude` (two independent in-session Claude
+runs, zero external CLI). For `claude-gemini3.1pro`, dropping Gemini falls back to `claude-claude` (spawn a
 second independent Claude panelist) so the judge still sees two blind answers. For a custom `--models`
 panel, the same rule applies generically: drop any failed slot, note the degradation, and continue with
 whatever panelists remain. A degraded run still completes; never abort because one runner failed.
@@ -208,7 +208,7 @@ because code and prose merge completely differently:
   synthesis** — the five sections: **Consensus**, **Contradictions**, **Partial coverage**, **Unique
   insights**, **Blind spots**. Don't average or smooth over conflict; independent agreement is your
   highest-confidence signal, honest disagreement is the most useful thing the panel produces. Write this
-  analysis to `/tmp/fusion_analysis.md` for the provenance record.
+  analysis to `/tmp/z3fusion_analysis.md` for the provenance record.
 
 Either way: attribute decisions to each panelist (by model / run), and weight a panelist that actually ran
 the code or read a primary source over one reasoning from memory. If a panelist failed or was dropped, the
@@ -223,24 +223,24 @@ judge treats it as **absent** — never as silent agreement.
   you verified.
 - **Track B (research):** write the answer grounded in the structured analysis — lead with high-confidence
   consensus, fold in unique insights, flag what stays uncertain. It must follow *from* the synthesis, not
-  be one panelist's answer lightly edited. Write it to `/tmp/fusion_final.md` for the provenance record.
+  be one panelist's answer lightly edited. Write it to `/tmp/z3fusion_final.md` for the provenance record.
 
 ## Step 5 — Save provenance
 
-Save the run to an internal provenance file under `~/.claude/fusion-runs/` (raw panelist answers + the
+Save the run to an internal provenance file under `~/.claude/z3fusion-runs/` (raw panelist answers + the
 analysis + the final answer, timestamped, for auditing):
 
 ```bash
 FUSION_PANEL_NOTE="<degradation note, or empty>" \
 FUSION_ESTIMATE="<the preflight one-liner, optional>" \
-bash <skill_dir>/scripts/save_run.sh <SLUG> /tmp/fusion_question.txt /tmp/fusion_analysis.md /tmp/fusion_final.md \
-  "opus-A=/tmp/fusion_opusA.md" "gpt5.5=$fusion_run_dir/codex_out.md" "gemini=$fusion_run_dir/gemini_out.md"
+bash <skill_dir>/scripts/save_run.sh <SLUG> /tmp/z3fusion_question.txt /tmp/z3fusion_analysis.md /tmp/z3fusion_final.md \
+  "opus-A=/tmp/z3fusion_opusA.md" "gpt5.6=$fusion_run_dir/codex_out.md" "gemini=$fusion_run_dir/gemini_out.md"
 ```
 
 (`save_run.sh` substitutes a placeholder for any answer file that is missing or empty, so a degraded panel
 still produces a complete record.) For a custom `--models` panel, pass one `label=path` pair per panelist
-actually launched — label each with its `model@runner` slot (e.g. `llama3.3@ollama=$fusion_run_dir/ollama_out.md`)
-instead of the legacy `opus-A`/`gpt5.5`/`gemini` labels above.
+actually launched — label each with its `model@runner` slot (e.g. `llama4@ollama=$fusion_run_dir/ollama_out.md`)
+instead of the legacy `opus-A`/`gpt5.6`/`gemini` labels above.
 
 ## Step 6 — Present
 

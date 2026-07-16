@@ -13,8 +13,8 @@ slug="${1:?usage: preflight.sh <slug> <prompt_file>}"
 prompt_file="${2:?usage: preflight.sh <slug> <prompt_file>}"
 
 case "$slug" in
-  opus4.8-gpt5.5-gemini3.1pro) n=3 ;;
-  opus4.8-gpt5.5|opus4.8-gemini3.1pro|opus4.8-4.8)  n=2 ;;
+  claude-gpt5.6-gemini3.1pro) n=3 ;;
+  claude-gpt5.6|claude-gemini3.1pro|claude-claude)  n=2 ;;
   *)                           n=2 ;;
 esac
 
@@ -31,10 +31,10 @@ echo "                 real token cost is several× the input. Heavy deep-resear
 echo "  per-panelist timeout : ${FUSION_TIMEOUT:-300}s (override with FUSION_TIMEOUT)"
 
 if command -v codex >/dev/null 2>&1; then
-  echo "  codex (GPT-5.5) : installed — quota isn't readable non-interactively; if a run fails on"
+  echo "  codex (GPT-5.6 Sol) : installed — quota isn't readable non-interactively; if a run fails on"
   echo "                    cap, check '/status' inside codex. Panel degrades gracefully if it does."
 else
-  echo "  codex (GPT-5.5) : NOT installed — GPT-5.5 panelist will be skipped."
+  echo "  codex (GPT-5.6 Sol) : NOT installed — GPT-5.6 Sol panelist will be skipped."
 fi
 
 exit 0

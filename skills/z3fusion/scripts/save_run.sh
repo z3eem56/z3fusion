@@ -4,18 +4,18 @@
 # Usage:
 #   save_run.sh <slug> <question_file> <analysis_file> <final_file> [LABEL=path ...]
 #
-# - <slug>           : the panel slug actually run (e.g. opus4.8-gpt5.5-gemini3.1pro)
+# - <slug>           : the panel slug actually run (e.g. claude-gpt5.6-gemini3.1pro)
 # - <question_file>  : the user's question, verbatim
 # - <analysis_file>  : the judge's 5-section structured analysis
 # - <final_file>     : the grounded final answer
 # - LABEL=path       : one per panelist, raw answer file (e.g. "opus-A=/tmp/..._opusA.md",
-#                      "gpt5.5=/tmp/fusion_codex_out.md", "gemini=/tmp/fusion_gemini_out.md")
+#                      "gpt5.6=/tmp/z3fusion_codex_out.md", "gemini=/tmp/z3fusion_gemini_out.md")
 #
 # Optional env:
-#   FUSION_PANEL_NOTE  degradation note (e.g. "gemini dropped: agy empty -> opus4.8-gpt5.5")
+#   FUSION_PANEL_NOTE  degradation note (e.g. "gemini dropped: agy empty -> claude-gpt5.6")
 #   FUSION_ESTIMATE    the preflight estimate string, for the record
 #
-# Output: prints the path of the .md it wrote. Writes ONLY under ~/.claude/fusion-runs/
+# Output: prints the path of the .md it wrote. Writes ONLY under ~/.claude/z3fusion-runs/
 # (internal disk) — never ~/Projects or /Volumes/4T (the external 4T is TCC-blocked).
 
 set -uo pipefail
@@ -26,7 +26,7 @@ analysis_file="${3:?need analysis_file}"
 final_file="${4:?need final_file}"
 shift 4
 
-RUNS_DIR="$HOME/.claude/fusion-runs"
+RUNS_DIR="$HOME/.claude/z3fusion-runs"
 mkdir -p "$RUNS_DIR"
 ts="$(date +%Y-%m-%d_%H%M%S)"
 out="$RUNS_DIR/${ts}_${slug}.md"

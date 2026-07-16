@@ -17,7 +17,7 @@ When a task is mixed (e.g. "design and implement X"), the implementation is the 
 for the code and fold the reasoning in as brief rationale.
 
 Read every panelist response in full first, and attribute by panelist (e.g. "panelist A (in-session
-Claude)", "panelist B (GPT-5.5 via codex)", "panelist C (llama3.3 via local Ollama)") so the user can see
+Claude)", "panelist B (GPT-5.6 Sol via codex)", "panelist C (llama4 via local Ollama)") so the user can see
 where each decision came from. A panel can hold anywhere from 1 to 8 panelists across any mix of
 providers — these are illustrative examples, not the full set of panelists that might actually be
 present; attribute to however many actually ran.

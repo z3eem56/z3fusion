@@ -4,8 +4,8 @@
 *~
 
 # Fusion scratch (runtime temp files the scripts write)
-/tmp/fusion_*
-fusion_codex_out.md
-fusion_codex_prompt.txt
-fusion_gemini_out.md
-fusion_gemini_prompt.txt
+/tmp/z3fusion_*
+z3fusion_codex_out.md
+z3fusion_codex_prompt.txt
+z3fusion_gemini_out.md
+z3fusion_gemini_prompt.txt

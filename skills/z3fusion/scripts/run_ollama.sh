@@ -60,7 +60,7 @@ fi
 mkdir -p "$(dirname "$output_file")"
 rm -f "$output_file"
 
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/fusion-ollama.XXXXXX")"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/z3fusion-ollama.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
 
 server_up() {

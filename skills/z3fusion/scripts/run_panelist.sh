@@ -10,7 +10,7 @@
 #
 # - <runner>      : "codex" | "agy" | "ollama" | any OpenAI-compat provider name known to
 #                    providers.sh (built-in table or user-registered in
-#                    ~/.claude/fusion-runners.json) | a user-registered "custom" command
+#                    ~/.claude/z3fusion-runners.json) | a user-registered "custom" command
 #                    template name from that same file.
 # - <model>       : model name/slug for that runner. May be the empty string for runners
 #                    that have their own configured default (e.g. codex, agy).
@@ -73,19 +73,20 @@ fi
 # NOTE: this dispatcher holds no temp state of its own — it is pure control flow that ends
 # every real path in `exec` (which replaces the process image, so an EXIT trap here would
 # never fire and a scratch dir would leak on every single invocation). If a future change
-# needs scratch space, create it with `mktemp -d "${TMPDIR:-/tmp}/fusion-panelist.XXXXXX"`
+# needs scratch space, create it with `mktemp -d "${TMPDIR:-/tmp}/z3fusion-panelist.XXXXXX"`
 # (never a fixed path — multiple concurrent z3Fusion sessions run on this machine) and clean
 # it up in the same branch that used it, not via a trap that `exec` would skip.
 
 # _custom_template <runner_name>
-# Looks up ~/.claude/fusion-runners.json's top-level "custom" object for a
+# Looks up ~/.claude/z3fusion-runners.json's top-level "custom" object for a
 # {"template": "..."} entry for <runner_name>. Prints the template string to stdout and
 # returns 0 if found; returns 1 (prints nothing) if the file, the "custom" key, the runner
 # entry, or its "template" string is missing/malformed. See providers.sh's header comment
-# for the full documented shape of fusion-runners.json (that file is the single spec).
+# for the full documented shape of z3fusion-runners.json (that file is the single spec).
 _custom_template() {
   local runner_name="$1"
-  local cfg="$HOME/.claude/fusion-runners.json"
+  local cfg="$HOME/.claude/z3fusion-runners.json"
+  [ -f "$cfg" ] || cfg="$HOME/.claude/fusion-runners.json"   # pre-rebrand fallback
   [ -f "$cfg" ] || return 1
   "$FUSION_PY" -c '
 import json, sys
@@ -119,7 +120,7 @@ _known_runners_message() {
   built-in special-cased : codex, agy, ollama
   built-in HTTP providers: openrouter, lmstudio, ollama-api, openai, groq, together,
                            fireworks, deepseek, mistral, xai, google
-  plus any provider/custom runner you register in ~/.claude/fusion-runners.json
+  plus any provider/custom runner you register in ~/.claude/z3fusion-runners.json
 EOF
 }
 
@@ -161,7 +162,7 @@ case "$runner" in
     if [ -n "$template" ]; then
       # Plain string replacement of the literal placeholders — no eval of user input beyond
       # running the templated command line itself (the template IS a shell command string
-      # by design, per its documented shape in ~/.claude/fusion-runners.json).
+      # by design, per its documented shape in ~/.claude/z3fusion-runners.json).
       cmd="${template//\{model\}/$model}"
       cmd="${cmd//\{prompt_file\}/$prompt_file}"
       cmd="${cmd//\{output_file\}/$output_file}"

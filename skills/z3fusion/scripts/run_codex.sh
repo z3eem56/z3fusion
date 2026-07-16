@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_codex.sh — run one GPT-5.5 panelist (via codex) on a prompt, with web search + bash.
+# run_codex.sh — run one GPT-5.6 Sol panelist (via codex) on a prompt, with web search + bash.
 #
 # Usage:
 #   run_codex.sh <prompt_file> <output_file> [reasoning_effort] [model]
@@ -7,7 +7,7 @@
 # - <prompt_file>   : path to a file containing the FULL panelist prompt (verbatim user task + brief instruction)
 # - <output_file>   : where the panelist's final answer is written (clean, just the answer)
 # - reasoning_effort: low | medium | high | xhigh   (default: xhigh)
-# - model           : optional model override, e.g. gpt-5.4 (default: codex's own configured model).
+# - model           : optional model override, e.g. gpt-5.6-sol (default: codex's own configured model).
 #                      Passed through as `--model <model>` — the verified, documented codex exec flag
 #                      ("Override the configured model for this run"), distinct from the
 #                      `-c model_reasoning_effort=...` config override below. Omit/empty = old behavior.
@@ -22,7 +22,7 @@
 # - The throwaway copy is deleted when the panelist exits.
 # - There is no `timeout`/`gtimeout` on stock macOS, so the codex run is wrapped in a self-contained
 #   perl timeout helper (FUSION_TIMEOUT, default 300s — see _fusion_lib.sh). On timeout the runner
-#   exits 124 so the orchestrator drops GPT-5.5 and degrades the panel gracefully.
+#   exits 124 so the orchestrator drops GPT-5.6 Sol and degrades the panel gracefully.
 
 set -uo pipefail
 
@@ -55,7 +55,7 @@ fi
 mkdir -p "$(dirname "$output_file")"
 rm -f "$output_file"
 
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/fusion-codex.XXXXXX")"
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/z3fusion-codex.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
 workdir="$scratch/workdir"
 
