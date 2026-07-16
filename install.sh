@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — install the Fusion skill + slash commands into your Claude Code config.
+# install.sh — install the z3Fusion skill + slash commands into your Claude Code config.
 #
 # Copies:
 #   skills/fusion        -> $CLAUDE_DIR/skills/fusion
@@ -29,7 +29,7 @@ if [ -d "$HERE/hooks" ]; then
   chmod +x "$CLAUDE_DIR/hooks/"*.sh 2>/dev/null || true
 fi
 
-echo "✓ Installed Fusion into $CLAUDE_DIR"
+echo "✓ Installed z3Fusion into $CLAUDE_DIR"
 echo "    skills   : $CLAUDE_DIR/skills/fusion , $CLAUDE_DIR/skills/fusion-plan"
 echo "    commands : /fusion  /fusion-opus4.8  /fusion-gpt5.5  /fusion-gemini  /fusion-3  /fusion-plan"
 echo
@@ -50,7 +50,7 @@ else
   echo "  opus4.8-gpt5.5-gemini3.1pro  : needs the 'agy' CLI (Antigravity; install + seed its keyring for Gemini 3.1 Pro)"
 fi
 echo
-echo "Beyond the pinned presets above, Fusion also composes an ad hoc panel out of any single"
+echo "Beyond the pinned presets above, z3Fusion also composes an ad hoc panel out of any single"
 echo "'model@runner' slot (see README.md's 'Bring your own model'). Runner reachability here:"
 
 ollama_ready=false

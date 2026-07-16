@@ -50,7 +50,9 @@
 # shell command-line templates for non-HTTP runners (arbitrary local CLIs); the three
 # literal placeholders {model}, {prompt_file}, {output_file} are substituted by the caller
 # (run_panelist.sh) with plain string replacement — no eval of user input beyond running
-# the templated command line itself.
+# the templated command line itself. NOTE: quote the placeholders in your template (e.g.
+# `--in "{prompt_file}"`) — substitution is textual, so unquoted paths containing spaces
+# (common on Windows) split into multiple arguments.
 # ---------------------------------------------------------------------------------------
 #
 # NOTE (bash 3.2 compat): the built-in table below is deliberately a `case` statement, not
@@ -58,6 +60,10 @@
 # 3.2 — see the identical note in run_codex.sh).
 
 FUSION_RUNNERS_JSON="${FUSION_RUNNERS_JSON:-$HOME/.claude/fusion-runners.json}"
+
+# Python fallback (same as _fusion_lib.sh, duplicated because this file is sourced standalone):
+# Windows installs often expose only `python`, not `python3`.
+FUSION_PY="${FUSION_PY:-$(command -v python3 || command -v python || echo python3)}"
 
 provider_lookup() {
   local name="${1:-}"
@@ -98,7 +104,7 @@ provider_lookup() {
   # --- User overrides/additions from ~/.claude/fusion-runners.json ("providers" only) ----
   if [ -f "$FUSION_RUNNERS_JSON" ]; then
     local user_out
-    user_out="$(NAME="$name" JSON_FILE="$FUSION_RUNNERS_JSON" python3 - <<'PYEOF'
+    user_out="$(NAME="$name" JSON_FILE="$FUSION_RUNNERS_JSON" "$FUSION_PY" - <<'PYEOF'
 import json
 import os
 import sys

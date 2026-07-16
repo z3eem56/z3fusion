@@ -17,16 +17,16 @@ description: >-
   way to call back into this session. Runs on local CLI subscriptions or fully local models with no metered
   API required for the legacy presets, and can also reach metered provider APIs when configured. Saves a
   timestamped provenance .md per run, and answers in French by default. Use this whenever the user asks to
-  "run it through Fusion", says /fusion, wants a multi-model / panel / ensemble answer, wants a question
+  "run it through z3Fusion", says /fusion, wants a multi-model / panel / ensemble answer, wants a question
   cross-checked across models, or wants a higher-confidence answer with consensus and blind spots surfaced —
   even if they don't say "fusion". General-purpose: any topic (research, law, strategy, technical,
   personal). Best for high-stakes research, design calls, and debugging where being confidently wrong is
   expensive.
 ---
 
-# Fusion
+# z3Fusion
 
-Fusion turns one prompt into a panel. The question goes to several models **at the same time**, each
+z3Fusion turns one prompt into a panel. The question goes to several models **at the same time**, each
 answering independently — with web search and bash, and with no knowledge of the others. Then the
 orchestrating Claude Code session (this very session — whichever model it is actually running as: Opus,
 Sonnet, Haiku, Fable, whatever the user selected via `/model`) reads every answer, extracts the structure of
@@ -52,7 +52,7 @@ swappable to an external model.
 models, any provider, run in parallel with web tools) judged/synthesized by one outer `model` is exactly
 what Step 2 (fan-out) and Step 3 (judge) do here — the difference is this skill dispatches every panelist
 itself, locally, over CLI/API calls, instead of delegating that fan-out to OpenRouter's server-side plugin.
-That means Fusion works **with or without an OpenRouter account**: the legacy presets and any local/CLI
+That means z3Fusion works **with or without an OpenRouter account**: the legacy presets and any local/CLI
 runner need no OpenRouter key at all. When `OPENROUTER_API_KEY` *is* set, it additionally unlocks the
 `<model>@openrouter` runner so any panel slot can point at literally any OpenRouter-listed model as a plain
 per-model HTTP call — this is the robust, verified path, and it is what makes "any provider" real without
@@ -135,9 +135,9 @@ Launch **all panelists in a single turn** so they run concurrently:
   fusion_run_dir="$(mktemp -d "${TMPDIR:-/tmp}/fusion-panel.XXXXXX")"
   bash <skill_dir>/scripts/run_panelist.sh <runner> <model> "$fusion_run_dir/<runner>_prompt.md" "$fusion_run_dir/<runner>_out.md" [effort]
   ```
-  Allocate one unique `fusion_run_dir` per Fusion invocation and put every prompt/output file for that
+  Allocate one unique `fusion_run_dir` per z3Fusion invocation and put every prompt/output file for that
   invocation under it. Never use fixed paths like `/tmp/fusion_codex_prompt.txt` or
-  `/tmp/fusion_codex_out.md`; multiple Claude Code sessions can run Fusion concurrently, and fixed names let
+  `/tmp/fusion_codex_out.md`; multiple Claude Code sessions can run z3Fusion concurrently, and fixed names let
   one run read another run's prompt or answer.
 
   `run_panelist.sh` is the single entry point every non-Claude panelist goes through; it dispatches to the
@@ -255,5 +255,5 @@ local server, or set the missing API key).
 
 A panel costs roughly N× a single answer in tokens and runs as slow as its slowest panelist. That's the
 deliberate trade: you spend more to stop being confidently wrong where that's expensive. For quick or
-low-stakes questions, a single direct answer is the right call — don't reach for Fusion when one model
+low-stakes questions, a single direct answer is the right call — don't reach for z3Fusion when one model
 would obviously do.

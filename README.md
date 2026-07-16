@@ -1,9 +1,9 @@
-# Fusion
+# z3Fusion
 
 **Fuse a panel of frontier models — any of them, from any provider, including ones running on your own
 machine — into one grounded answer.**
 
-Fusion is a [Claude Code](https://claude.com/claude-code) skill that runs a hard question through a
+z3Fusion is a [Claude Code](https://claude.com/claude-code) skill that runs a hard question through a
 **panel → judge** pipeline. The same prompt is dispatched to several models *in parallel* — each answering
 independently with web search and bash, none seeing the others' work — and then the orchestrating Claude
 Code session (whichever model it's actually running as — Opus, Sonnet, Haiku, Fable, whatever `/model` is
@@ -11,28 +11,28 @@ set to) reads every answer, judges it into a structured analysis (consensus, con
 coverage, unique insights, blind spots), and writes a final answer grounded in that analysis.
 
 <p align="center">
-  <img src="assets/pipeline.svg" alt="Fusion pipeline: a prompt fans out to several independent panelists (any model@runner mix, each answering blind with web + bash), which the orchestrating Claude Code session judges and synthesizes into consensus, contradictions, partial coverage, unique insights and blind spots, then writes a final grounded answer." width="100%">
+  <img src="assets/pipeline.svg" alt="z3Fusion pipeline: a prompt fans out to several independent panelists (any model@runner mix, each answering blind with web + bash), which the orchestrating Claude Code session judges and synthesizes into consensus, contradictions, partial coverage, unique insights and blind spots, then writes a final grounded answer." width="100%">
 </p>
 
 ## Why a panel beats one model
 
 The diversity that makes a panel beat a single model is **harvested, not manufactured**: running the same
 prompt independently yields different reasoning paths, tool calls, and sources — even two cold runs of the
-*same* model diverge enough that synthesizing them beats running it once. So Fusion assigns no contrived
+*same* model diverge enough that synthesizing them beats running it once. So z3Fusion assigns no contrived
 "lenses" or personas; every panelist gets the task **verbatim** and answers it straight.
 
 On the DRACO deep-research benchmark, [OpenRouter](https://openrouter.ai/docs/guides/routing/routers/fusion-router)
 found that fusing model answers consistently beats the individual models — and that a meaningful chunk of
-the lift comes from the *synthesis step itself*, not just from mixing architectures. Fusion implements that
+the lift comes from the *synthesis step itself*, not just from mixing architectures. z3Fusion implements that
 same independence-then-judge pipeline locally in Claude Code.
 
-**Design reference.** Fusion's panel → judge shape is a local implementation of
+**Design reference.** z3Fusion's panel → judge shape is a local implementation of
 [OpenRouter's Fusion Router](https://openrouter.ai/docs/guides/routing/routers/fusion-router): its
 `analysis_models` array (1-8 models, any provider, run in parallel with web tools) judged/synthesized by
-one outer `model` is exactly what Fusion's fan-out + judge steps do — the difference is Fusion dispatches
+one outer `model` is exactly what z3Fusion's fan-out + judge steps do — the difference is z3Fusion dispatches
 every panelist itself, locally, over CLI/API calls, so it works fully **with or without** an OpenRouter
 account. (OpenRouter also ships fusion as a hosted, server-side capability — its
-[Fusion plugin](https://openrouter.ai/docs/guides/features/plugins/fusion) — which is a different thing
+[z3Fusion plugin](https://openrouter.ai/docs/guides/features/plugins/fusion) — which is a different thing
 from the Fusion Router design above; an `openrouter` panel slot can optionally attach that plugin as an
 EXPERIMENTAL, opt-in path — see [Advanced: attach OpenRouter's own fusion plugin](#advanced-attach-openrouters-own-fusion-plugin).)
 
@@ -61,7 +61,7 @@ qwen2.5@ollama,llama-4-maverick@openrouter,gpt-5.5@codex,gemini-3.1-pro@agy,clau
 ```
 
 Compose these with `--models <model@runner,...>` via the generic `/fusion` command, or just ask in prose
-("run Fusion with a local Llama model and DeepSeek from OpenRouter on …"). `detect_panel.sh` (Fusion's
+("run z3Fusion with a local Llama model and DeepSeek from OpenRouter on …"). `detect_panel.sh` (z3Fusion's
 Step 0) probes every runner reachable on your machine — CLIs on `PATH`, local servers, provider API keys in
 your environment — and recommends the richest panel automatically if you don't specify one.
 
@@ -147,7 +147,7 @@ Ollama/LM Studio reachability, and which provider API keys are set. Restart Clau
 Four ways, all equivalent under the hood:
 
 - **Natural language** — just ask. The skill auto-triggers and picks the richest available panel:
-  > "Run this through Fusion: is it safe to `ALTER TABLE … ADD COLUMN` on a 200M-row Postgres table in prod?"
+  > "Run this through z3Fusion: is it safe to `ALTER TABLE … ADD COLUMN` on a 200M-row Postgres table in prod?"
 - **Pinned slash commands** — force one of the four zero-config presets:
   ```
   /fusion-opus4.8  does my JWT refresh-rotation design have a replay hole?
@@ -158,7 +158,7 @@ Four ways, all equivalent under the hood:
 - **Composable panel** — `/fusion --models <model@runner,...> :: <question>` to pick any mix of
   models/providers/local runners yourself, or `/fusion <question>` with no `--models` to let
   `detect_panel.sh` recommend the richest preset automatically.
-- **Force a panel in prose** — "run the `opus4.8-gpt5.5` Fusion on …", or "Fusion this with a local Ollama
+- **Force a panel in prose** — "run the `opus4.8-gpt5.5` z3Fusion on …", or "z3Fusion this with a local Ollama
   model and Grok from OpenRouter".
 
 ## What you get back
@@ -211,7 +211,7 @@ Reserve it for high-stakes planning — it costs an interview + ~6 panelist runs
 `hooks/fusion-plan-nudge.sh` is an optional `PreToolUse` hook (matcher `Agent|Task`). When the orchestrator
 is about to delegate a non-trivial *implementation* task to a sub-agent, it injects an advisory reminder to
 run `/fusion-plan --no-interview` on it first. Advisory only (never blocks), de-dupes per task, skips
-Fusion's own panelist spawns. `install.sh` copies it to `~/.claude/hooks/` but does **not** enable it — opt
+z3Fusion's own panelist spawns. `install.sh` copies it to `~/.claude/hooks/` but does **not** enable it — opt
 in via `settings.json` (the installer prints the exact snippet).
 
 ## Requirements, per runner
@@ -235,13 +235,13 @@ in via `settings.json` (the installer prints the exact snippet).
   runners: the matching API key set in your environment (`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, etc.).
 - Any custom runner: whatever you configured for it in `~/.claude/fusion-runners.json`.
 
-Every Fusion invocation uses its own temporary prompt/output directory, so concurrent runs — in different
+Every z3Fusion invocation uses its own temporary prompt/output directory, so concurrent runs — in different
 Claude Code sessions, or different panels in the same session — never read each other's panelist artifacts.
 Each panelist is bounded by a per-panelist timeout (`FUSION_TIMEOUT`, default 300s; there's no
 `timeout`/`gtimeout` on stock macOS, so runners wrap calls in a self-contained `perl` timeout helper).
 
 Only `opus4.8-4.8` is truly zero-setup among the legacy presets; everything else lights up once its
-CLI/server/key is available — and nothing ever *has* to be installed, since Fusion degrades gracefully to
+CLI/server/key is available — and nothing ever *has* to be installed, since z3Fusion degrades gracefully to
 whatever panel the machine can actually support.
 
 ## What's in here
@@ -282,7 +282,7 @@ install.sh                  copies the above into ~/.claude (hook copied but lef
 
 A panel costs roughly N× a single answer in tokens and runs as slow as its slowest panelist. That's the
 deliberate trade: spend more to stop being confidently wrong where that's expensive. For quick or
-low-stakes questions, a single direct answer is the right call — don't reach for Fusion when one model
+low-stakes questions, a single direct answer is the right call — don't reach for z3Fusion when one model
 would obviously do.
 
 ## License

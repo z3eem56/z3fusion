@@ -1,5 +1,5 @@
 ---
-description: Fusion full panel — an in-session Claude panelist + GPT-5.5 + Gemini 3.1 Pro in parallel, judged by the orchestrating Claude Code session (opus4.8-gpt5.5-gemini3.1pro)
+description: z3Fusion full panel — an in-session Claude panelist + GPT-5.5 + Gemini 3.1 Pro in parallel, judged by the orchestrating Claude Code session (opus4.8-gpt5.5-gemini3.1pro)
 argument-hint: <your question>
 ---
 Invoke the **fusion** skill on the task below, forcing the richest legacy panel `opus4.8-gpt5.5-gemini3.1pro`:

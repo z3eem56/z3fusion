@@ -1,5 +1,5 @@
 ---
-description: Fusion panel of an in-session Claude panelist + Gemini 3.1 Pro in parallel, judged by the orchestrating Claude Code session (opus4.8-gemini3.1pro)
+description: z3Fusion panel of an in-session Claude panelist + Gemini 3.1 Pro in parallel, judged by the orchestrating Claude Code session (opus4.8-gemini3.1pro)
 argument-hint: <your question>
 ---
 Invoke the **fusion** skill on the task below, forcing the `opus4.8-gemini3.1pro` legacy panel:

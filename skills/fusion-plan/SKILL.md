@@ -14,7 +14,7 @@ description: >-
   trivial tasks (single pass is enough).
 ---
 
-# Fusion-Plan — OMC interview, then a 3-round iterative panel
+# z3Fusion-Plan — OMC interview, then a 3-round iterative panel
 
 This skill follows the **OMC plan system**: requirements are gathered by OMC's real interview FIRST, then
 the fusion panel deepens the resulting plan, and the output flows back into OMC's review → execution

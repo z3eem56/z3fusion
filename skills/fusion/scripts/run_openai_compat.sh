@@ -41,7 +41,7 @@
 #             (failed to build request body, non-2xx HTTP status, curl failure, or empty
 #             extracted answer); 0 = success (output_file written, non-empty).
 #
-# NOTE: like every other Fusion runner, none of these endpoints could be functionally
+# NOTE: like every other z3Fusion runner, none of these endpoints could be functionally
 # tested end to end in this environment. The request/response shape follows the documented
 # OpenAI chat-completions API that every listed provider advertises compatibility with, but
 # exact error-body shapes, rate-limit behavior, etc. are best-effort/unverified here.
@@ -108,7 +108,7 @@ http_code_file="$scratch/http_code.txt"
 curl_err_file="$scratch/curl_stderr.log"
 
 # --- Build the request body via an inline python3 heredoc (no jq dependency) --------------
-MODEL="$model" EXTRA_JSON="$extra_json" python3 - "$prompt_file" > "$body_file" 2>"$scratch/body_build.log" <<'PYEOF'
+MODEL="$model" EXTRA_JSON="$extra_json" "$FUSION_PY" - "$prompt_file" > "$body_file" 2>"$scratch/body_build.log" <<'PYEOF'
 import json
 import os
 import sys

@@ -1,5 +1,5 @@
 ---
-description: Fusion panel of two independent in-session Claude runs, judged by the orchestrating Claude Code session (opus4.8-4.8)
+description: z3Fusion panel of two independent in-session Claude runs, judged by the orchestrating Claude Code session (opus4.8-4.8)
 argument-hint: <your question>
 ---
 Invoke the **fusion** skill on the task below, forcing the `opus4.8-4.8` legacy panel:

@@ -85,8 +85,8 @@ esac
 # fd 0 termios; fall back to `script` only if python3 is missing (plain TTY contexts).
 # sed strips ANSI (ESC[...m) and the literal "^D" caret-notation; tr removes residual control
 # bytes (CR, etc.) while keeping tab + newline.
-if have python3 && python3 -c 'import pty' 2>/dev/null; then
-  pty_runner=( python3 "$SCRIPT_DIR/_pty_run.py" )
+if have "$FUSION_PY" && "$FUSION_PY" -c 'import pty' 2>/dev/null; then
+  pty_runner=( "$FUSION_PY" "$SCRIPT_DIR/_pty_run.py" )
 elif have script; then
   pty_runner=( script -q /dev/null )
 else
@@ -110,8 +110,8 @@ if [ ! -s "$output_file" ]; then
     if have jq; then
       jq -rs 'map(select(.source=="MODEL" and .status=="DONE" and .type=="PLANNER_RESPONSE"))
               | (last // {}) | .content // empty' "$tr" > "$output_file" 2>/dev/null
-    elif have python3; then
-      python3 -c '
+    elif have "$FUSION_PY"; then
+      "$FUSION_PY" -c '
 import sys, json
 ans = ""
 for line in sys.stdin:

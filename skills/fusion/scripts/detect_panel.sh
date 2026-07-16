@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# detect_panel.sh — figure out which panelist CLIs/APIs are reachable and recommend a Fusion panel.
+# detect_panel.sh — figure out which panelist CLIs/APIs are reachable and recommend a z3Fusion panel.
 #
-# Fusion fans a prompt out to a panel of models in parallel, then the orchestrating Claude Code session
+# z3Fusion fans a prompt out to a panel of models in parallel, then the orchestrating Claude Code session
 # (whichever model it is actually running as) judges. An in-session Claude panelist is always available
 # via the Agent tool (in-process subagents), and the orchestrating session is always the judge — so
 # neither needs a CLI check.
@@ -14,7 +14,7 @@
 #   2. (new) ALSO probes every other runner the generic dispatcher (run_panelist.sh) can reach — local
 #      runtimes (ollama, LM Studio) and hosted OpenAI-compat providers gated on an API key env var — and
 #      prints a "RUNNERS AVAILABLE:" table plus a composable "--models ...@runner,...@runner" example, so
-#      a caller knows a Fusion panel is not limited to the 4 legacy slug presets.
+#      a caller knows a z3Fusion panel is not limited to the 4 legacy slug presets.
 #
 # NOTE (unverified in this environment): the localhost reachability probes (ollama server, LM Studio
 # server) are best-effort — curl is given a short --max-time so a dead/firewalled port fails fast

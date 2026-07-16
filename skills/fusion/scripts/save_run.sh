@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# save_run.sh — write the provenance .md for one Fusion run, on the INTERNAL disk only.
+# save_run.sh — write the provenance .md for one z3Fusion run, on the INTERNAL disk only.
 #
 # Usage:
 #   save_run.sh <slug> <question_file> <analysis_file> <final_file> [LABEL=path ...]
@@ -42,7 +42,7 @@ emit_file() {
 }
 
 {
-  echo "# Fusion run — $ts"
+  echo "# z3Fusion run — $ts"
   echo
   echo "- **Panel run** : \`$slug\`"
   [ -n "${FUSION_PANEL_NOTE:-}" ] && echo "- **Degradation** : ${FUSION_PANEL_NOTE}"

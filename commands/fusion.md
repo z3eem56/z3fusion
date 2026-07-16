@@ -1,5 +1,5 @@
 ---
-description: Fusion with a custom panel — pass --models <model@runner,...> :: <question> to compose any mix of models/providers/local runners, or omit --models to let detect_panel.sh recommend the richest legacy preset automatically
+description: z3Fusion with a custom panel — pass --models <model@runner,...> :: <question> to compose any mix of models/providers/local runners, or omit --models to let detect_panel.sh recommend the richest legacy preset automatically
 argument-hint: "[--models <model@runner,...> ::] <your question>"
 ---
 Invoke the **fusion** skill on the task below. Unlike the four pinned presets (`/fusion-opus4.8`,

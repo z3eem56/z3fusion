@@ -117,7 +117,7 @@ fi
 body_file="$scratch/body.json"
 resp_file="$scratch/resp.json"
 
-MODEL="$model" python3 - "$prompt_file" > "$body_file" <<'PYEOF'
+MODEL="$model" "$FUSION_PY" - "$prompt_file" > "$body_file" <<'PYEOF'
 import json
 import os
 import sys
@@ -155,7 +155,7 @@ else
   exit 127
 fi
 
-python3 - "$resp_file" > "$output_file" <<'PYEOF'
+"$FUSION_PY" - "$resp_file" > "$output_file" <<'PYEOF'
 import json
 import sys
 

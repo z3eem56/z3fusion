@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_panelist.sh — generic dispatcher for every non-in-session Fusion panelist.
+# run_panelist.sh — generic dispatcher for every non-in-session z3Fusion panelist.
 #
 # SKILL.md's Step 2 calls this script once per panel slot of the form "model@runner"
 # (a bare "model" with no "@" means an in-session Claude Agent-tool subagent — that case is
@@ -18,7 +18,7 @@
 # - <output_file> : where the panelist's final answer is written.
 # - [effort]      : optional reasoning effort, only meaningful for the "codex" runner.
 #
-# Exit codes (matches every other Fusion runner's convention):
+# Exit codes (matches every other z3Fusion runner's convention):
 #   0   success (output_file written, non-empty)
 #   1   other failure or empty output
 #   2   bad usage or missing prompt file
@@ -39,6 +39,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Python fallback (same as _fusion_lib.sh, duplicated because this script doesn't source it):
+# Windows installs often expose only `python`, not `python3`.
+FUSION_PY="${FUSION_PY:-$(command -v python3 || command -v python || echo python3)}"
 
 usage() {
   echo "usage: run_panelist.sh <runner> <model> <prompt_file> <output_file> [effort]" >&2
@@ -70,7 +74,7 @@ fi
 # every real path in `exec` (which replaces the process image, so an EXIT trap here would
 # never fire and a scratch dir would leak on every single invocation). If a future change
 # needs scratch space, create it with `mktemp -d "${TMPDIR:-/tmp}/fusion-panelist.XXXXXX"`
-# (never a fixed path — multiple concurrent Fusion sessions run on this machine) and clean
+# (never a fixed path — multiple concurrent z3Fusion sessions run on this machine) and clean
 # it up in the same branch that used it, not via a trap that `exec` would skip.
 
 # _custom_template <runner_name>
@@ -83,7 +87,7 @@ _custom_template() {
   local runner_name="$1"
   local cfg="$HOME/.claude/fusion-runners.json"
   [ -f "$cfg" ] || return 1
-  python3 -c '
+  "$FUSION_PY" -c '
 import json, sys
 
 cfg_path, runner_name = sys.argv[1], sys.argv[2]

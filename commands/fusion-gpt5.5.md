@@ -1,5 +1,5 @@
 ---
-description: Fusion panel of an in-session Claude panelist + GPT-5.5 in parallel, judged by the orchestrating Claude Code session (opus4.8-gpt5.5)
+description: z3Fusion panel of an in-session Claude panelist + GPT-5.5 in parallel, judged by the orchestrating Claude Code session (opus4.8-gpt5.5)
 argument-hint: <your question>
 ---
 Invoke the **fusion** skill on the task below, forcing the `opus4.8-gpt5.5` legacy panel:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# _fusion_lib.sh — shared helpers for the Fusion panelist runners.
+# _fusion_lib.sh — shared helpers for the z3Fusion panelist runners.
 #
 # Sourced (not executed) by run_codex.sh and run_gemini.sh:
 #   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,6 +13,10 @@
 
 # Default per-panelist budget in seconds; override with FUSION_TIMEOUT.
 FUSION_TIMEOUT="${FUSION_TIMEOUT:-300}"
+
+# Python interpreter: Windows installs often expose only `python`, not `python3`.
+# Falls back to the literal "python3" so error messages still name the real dependency.
+FUSION_PY="${FUSION_PY:-$(command -v python3 || command -v python || echo python3)}"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -44,7 +48,7 @@ _run_with_timeout() {
 # helper.
 _extract_openai_content() {
   local json_file="$1" output_file="$2"
-  python3 -c '
+  "$FUSION_PY" -c '
 import json
 import sys
 
@@ -65,6 +69,14 @@ if isinstance(data, dict):
             text = data["message"]["content"] or ""
         except (KeyError, TypeError):
             text = ""
+
+# Some providers return content as a list of parts ({"type": "text", "text": ...})
+# instead of a plain string — flatten the text parts.
+if isinstance(text, list):
+    text = "".join(
+        p.get("text", "") for p in text
+        if isinstance(p, dict) and isinstance(p.get("text", ""), str)
+    )
 
 with open(output_file, "w", encoding="utf-8") as f:
     f.write(text if isinstance(text, str) else "")

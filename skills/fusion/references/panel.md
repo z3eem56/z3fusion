@@ -1,6 +1,6 @@
 # The panel
 
-Fusion's power comes from **independent answers, synthesized** — not from a clever prompt or assigned
+z3Fusion's power comes from **independent answers, synthesized** — not from a clever prompt or assigned
 personas. You dispatch the same question to several models at once, each works the problem cold with no
 knowledge of the others, and a judge fuses their answers. Independent agreement is high-confidence;
 independent disagreement is exactly the signal worth surfacing.
@@ -26,7 +26,7 @@ answers meet. Cross-pollination before the judge defeats the entire mechanism.
 
 ## Panel composition per slug
 
-Fusion panels are composable: any 1 to 8 panelists, drawn from any provider, in any combination, using the
+z3Fusion panels are composable: any 1 to 8 panelists, drawn from any provider, in any combination, using the
 slot syntax `model@runner` (a bare `model` with no `@` means an in-session Claude Agent-tool subagent —
 `@claude` is the explicit spelling of the same thing). A panelist can be an in-session Claude subagent, a
 model reached through a CLI (`codex` for OpenAI models, `agy` for Google models), a fully local model
@@ -56,7 +56,7 @@ orchestrating session judges) so the synthesis reads the answers fresh rather th
 itself. The orchestrating session always judges and writes the final answer — the pipeline can't be
 reversed, since panelist models can't call back out to spawn the orchestrator. This is a real, stated scope
 boundary, not an oversight: the panel is freely composable (any 1 to 8 models, any provider) — the judge is
-not; it is always, and only, whichever model is running the Fusion session.
+not; it is always, and only, whichever model is running the z3Fusion session.
 
 ## Prompt each panelist gets
 
