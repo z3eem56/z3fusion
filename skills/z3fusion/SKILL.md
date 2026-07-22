@@ -16,7 +16,7 @@ description: >-
   and writes the final answer — the pipeline can't be reversed, because external panelist CLIs/APIs have no
   way to call back into this session. Runs on local CLI subscriptions or fully local models with no metered
   API required for the legacy presets, and can also reach metered provider APIs when configured. Saves a
-  timestamped provenance .md per run, and answers in French by default. Use this whenever the user asks to
+  timestamped provenance .md per run, and answers in english by default. Use this whenever the user asks to
   "run it through z3Fusion", says /z3fusion, wants a multi-model / panel / ensemble answer, wants a question
   cross-checked across models, or wants a higher-confidence answer with consensus and blind spots surfaced —
   even if they don't say "fusion". General-purpose: any topic (research, law, strategy, technical,
