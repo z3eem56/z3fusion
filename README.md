@@ -45,7 +45,7 @@ no fixed roster:
 | --- | --- | --- |
 | *(no `@runner`, or `@claude`)* | An **in-session Claude Agent-tool subagent** — this very Claude Code session, spawned as a blind panelist | nothing — always available |
 | `codex` | The **GPT family**, via the [`codex` CLI](https://github.com/openai/codex) (`codex exec`, full local tool access against a throwaway repo copy) | `codex` CLI, logged in |
-| `agy` | The **Gemini family**, via the `agy` / Antigravity CLI (pseudo-TTY workaround for its print-mode bug) | `agy` CLI, keyring seeded |
+| `agy` | The **Gemini family**, via the `agy` / Antigravity CLI (native `--output-format json`, explicit model pin, routing verified per run) | `agy` CLI, keyring seeded |
 | `ollama` | **Any locally-pulled Ollama model** — zero API key, never leaves your machine | `ollama` CLI or local server |
 | `lmstudio` | A model loaded in **LM Studio**'s local server | LM Studio running (`localhost:1234`) |
 | `openrouter` | **Any model OpenRouter lists, from any provider** — Anthropic, OpenAI, Google, DeepSeek, Meta/Llama, Mistral, xAI, Qwen, and hundreds more, addressed as a plain slug like `deepseek/deepseek-v4-pro` | `OPENROUTER_API_KEY` |
@@ -120,7 +120,7 @@ defaults, not the ceiling:
 | --- | --- | --- |
 | `claude-claude` | the **same prompt run twice** as 2 independent in-session Claude panelists → the session judges | nothing — works everywhere |
 | `claude-gpt5.6` | in-session Claude + **GPT-5.6 Sol** (codex) in parallel → the session judges | the `codex` CLI |
-| `claude-gemini3.1pro` | in-session Claude + **Gemini 3.1 Pro** (agy) in parallel → the session judges | the `agy` CLI |
+| `claude-gemini3.1pro` | in-session Claude + **Gemini 3.1 Pro** (agy, pinned to `gemini-3.1-pro-high`) in parallel → the session judges | the `agy` CLI |
 | `claude-gpt5.6-gemini3.1pro` | in-session Claude + GPT-5.6 Sol + Gemini 3.1 Pro in parallel → the session judges | `codex` + `agy` CLIs |
 
 `detect_panel.sh` auto-detects which panelist CLIs are installed and recommends the richest of these four,
@@ -223,9 +223,9 @@ in via `settings.json` (the installer prints the exact snippet).
   trusted local access, so tools like `gh`, test runners, Docker, and SDK-managed toolchains behave like
   they do in your terminal, without writing back to the live checkout.
 - `agy` runner: the **`agy`** (Antigravity) CLI, installed with its keyring seeded — run `agy` once
-  interactively to complete the Google OAuth, then headless runs reuse that login. Works around agy's
-  print-mode bug (empty stdout under no TTY) via a pseudo-TTY, a transcript-JSONL fallback, and a hard
-  anti-empty guard, so it never silently returns nothing.
+  interactively to complete the Google OAuth, then headless runs reuse that login. Always passes an
+  explicit `--model`, prefers agy's native `--output-format json`, and verifies after every run which
+  model agy actually routed to — see [Reliability guarantees](#reliability-guarantees).
 - `ollama` runner: the [Ollama](https://ollama.com) CLI with the model already pulled, **or** just a local
   Ollama server running — no API key either way. Prefers the CLI (`ollama run <model>`), falls back to the
   local REST API if the CLI is absent or comes back empty.
@@ -244,6 +244,82 @@ Only `claude-claude` is truly zero-setup among the legacy presets; everything el
 CLI/server/key is available — and nothing ever *has* to be installed, since z3Fusion degrades gracefully to
 whatever panel the machine can actually support.
 
+## Reliability guarantees
+
+These are the properties the test suite pins down. Run it with:
+
+```bash
+bash skills/z3fusion/tests/run_tests.sh     # 34 assertions, no network, no model spend
+```
+
+### Gemini is hard-pinned to Gemini 3.1 Pro (High)
+
+`/z3fusion-gemini` and the `gemini-3.1-pro@agy` slot resolve to **Gemini 3.1 Pro (High)**. `run_gemini.sh`
+always passes an explicit `--model`; it never falls back to Flash, another Pro tier, or agy's configured
+default. If the model is not listed by `agy models`, the panelist fails with
+`required model unavailable: <model>` rather than running something else.
+
+Configuration alone is not treated as proof. After every run the runner reads back which model agy
+*actually routed to*, from agy's own per-invocation log, and **fails the panelist on mismatch**. This is
+load-bearing: on agy 1.1.8, passing the runtime id `gemini-3.1-pro-high` while the CLI cannot reach its
+model table is silently downgraded —
+
+```
+resolver.go:85] Model ID gemini-3.1-pro-high not in local config, defaulting to CCPA
+model_config_manager.go:272] Propagating selected model override to backend: label="Gemini 3.6 Flash (High)"
+```
+
+— and the model's own reply agreed it was Flash. Model self-identification in generated text is never used
+as evidence.
+
+### Claude panelist relay recovery
+
+An `Agent` call can return `status: completed`, with real token spend and real tool use, while the text
+relayed back is a degenerate sentinel such as `Idle.` — observed when a `SubagentStop` hook re-wakes an
+already-finished subagent until its last message degenerates, since the Agent tool returns that last
+message. The real answer is not lost; it is in the subagent's own transcript.
+
+`claude_relay.py` classifies the relayed result and, when it is suspicious (empty, whitespace-only,
+`Idle.`, another bare status sentinel, harness metadata, or implausibly short), recovers the completed
+output keyed on the `agentId` the Agent tool reported — never a reconstructed path. It refuses to read
+anything unless the agent actually completed, so a still-running agent is never scraped for partial output.
+A recovered panelist counts as **healthy** and reaches the judge normally.
+
+### Layered Gemini output transport
+
+| Level | Transport | When |
+| --- | --- | --- |
+| 1 | `json` | `--output-format json`, parsed natively — preferred |
+| 2 | `stdout-text` | only when structured output is unparseable — a capability problem |
+| 3 | `windows-transcript-fallback` | exit 0 with empty stdout (historical agy bug #76) |
+
+Transcript recovery is a **compatibility fallback, not the normal transport**: agy bug #76 is fixed as of
+agy 1.1.8, where both print modes capture cleanly with no PTY. Each invocation runs in its own fresh
+workspace, so the fallback can only read *that* run's conversation, and a transcript older than the
+invocation is rejected. `exit 0` with empty output is not success, and a non-zero exit is never masked by
+the fallback.
+
+### Provenance
+
+Alongside the run record in `~/.claude/z3fusion-runs/`, runners write `<answer_file>.provenance.json`:
+
+```json
+{
+  "backend": "agy",
+  "requested_model": "gemini-3.1-pro",
+  "model": "gemini-3.1-pro-high",
+  "agy_model_arg": "Gemini 3.1 Pro (High)",
+  "routed_model_label": "Gemini 3.1 Pro (High)",
+  "model_pin_verified": true,
+  "exit_code": 0,
+  "output_transport": "json",
+  "conversation_id": "..."
+}
+```
+
+A recovered Claude panelist records `result_transport: recovered-task-output` plus the `relay_anomaly` that
+triggered it; one that returned cleanly is `result_transport: normal`.
+
 ## What's in here
 
 ```
@@ -251,12 +327,13 @@ skills/z3fusion/
   SKILL.md                  detect → preflight → blind fan-out → judge → grounded final → save
   scripts/
     _fusion_lib.sh          shared helpers: perl-based per-panelist timeout, have(), JSON content extraction
-    _pty_run.py             pty.fork() runner so agy gets a TTY even under socket stdio (cmux/headless)
+    agy_transcript.py       compatibility fallback: reads one agy run's answer back from its own transcript
+    claude_relay.py         validates an Agent result; recovers a completed panelist's answer by agentId
     detect_panel.sh         reports every reachable runner + recommends a legacy preset
     preflight.sh            non-blocking token/call estimate + Codex cap reminder
     run_panelist.sh         generic dispatcher: model@runner -> the right runner below
     run_codex.sh            runs a GPT-family panelist via codex exec (web + bash, timeout, optional --model)
-    run_gemini.sh           runs a Gemini-family panelist via agy (pseudo-TTY + transcript fallback)
+    run_gemini.sh           runs a Gemini-family panelist via agy (pinned --model, json → text → transcript)
     run_ollama.sh           runs a fully local Ollama panelist (CLI + REST fallback, zero API key)
     run_openai_compat.sh    runs any OpenAI-chat-completions-compatible HTTP panelist (OpenRouter, hosted APIs, local servers)
     providers.sh            built-in provider table + ~/.claude/z3fusion-runners.json loader
@@ -264,6 +341,9 @@ skills/z3fusion/
   references/
     panel.md                why independent parallel runs (no lenses) — the panel mechanism
     judge_rubric.md         Track A (merge & verify) / Track B (structured synthesis) rubric
+  tests/
+    run_tests.sh            34 assertions: model pin, relay recovery, transports, hardening (no network)
+    mock_agy.sh             stand-in `agy` on PATH so the transport paths are testable offline
 skills/z3fusion-plan/
   SKILL.md                  OMC interview → 3-round seeded panel → concise .omc/plans/ → review/execute
 commands/
