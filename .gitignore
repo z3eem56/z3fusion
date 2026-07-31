@@ -9,3 +9,5 @@ z3fusion_codex_out.md
 z3fusion_codex_prompt.txt
 z3fusion_gemini_out.md
 z3fusion_gemini_prompt.txt
+__pycache__/
+*.pyc

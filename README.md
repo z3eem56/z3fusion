@@ -249,7 +249,7 @@ whatever panel the machine can actually support.
 These are the properties the test suite pins down. Run it with:
 
 ```bash
-bash skills/z3fusion/tests/run_tests.sh     # 34 assertions, no network, no model spend
+bash skills/z3fusion/tests/run_tests.sh     # 78 assertions, no network, no model spend
 ```
 
 ### Gemini is hard-pinned to Gemini 3.1 Pro (High)
@@ -279,11 +279,96 @@ relayed back is a degenerate sentinel such as `Idle.` — observed when a `Subag
 already-finished subagent until its last message degenerates, since the Agent tool returns that last
 message. The real answer is not lost; it is in the subagent's own transcript.
 
-`claude_relay.py` classifies the relayed result and, when it is suspicious (empty, whitespace-only,
-`Idle.`, another bare status sentinel, harness metadata, or implausibly short), recovers the completed
-output keyed on the `agentId` the Agent tool reported — never a reconstructed path. It refuses to read
-anything unless the agent actually completed, so a still-running agent is never scraped for partial output.
-A recovered panelist counts as **healthy** and reaches the judge normally.
+It gets worse: the harness wraps that relay in its own bookkeeping — a `SECURITY WARNING:` block, the
+`agentId: … (use SendMessage …)` trailer, a `<usage>` element — glued onto the **same line** as the
+sentinel. Judged as a whole that blob is 700+ characters of fluent prose, so a length-and-sentinel
+classifier calls it a healthy answer. A wrapper made a sentinel look real.
+
+So classification runs on the **answer**, not the envelope:
+
+```
+raw relay → strip harness wrappers → residual → classify → normal
+                                                        └→ suspicious → recover from transcript
+```
+
+`claude_relay.py normalize` does all of it in one call and writes the canonical panel result. Stripping is
+structural and anchored to the shapes the harness actually emits, so an answer that merely *discusses* a
+security warning, an agent or a tool is untouched — there are explicit negative tests for exactly that.
+After stripping, a result is suspicious when it is empty, `Idle.` / `No action.` or another bare status
+sentinel, a wake-up reply, harness metadata only, or implausibly short. Recovery is keyed on the `agentId`
+the Agent tool reported — never a reconstructed path — and refuses to read anything unless the agent
+actually completed, so a still-running agent is never scraped for partial output. A recovered panelist
+counts as **healthy** and reaches the judge normally.
+
+Sentinel detection is pattern-based, and that is stated rather than glossed over: a novel phrasing can
+still slip through. Two shapes had to be added after live counter-examples, including one that was plain
+prose with no sentinel wording at all — *"I've now delivered this answer six times… I'm going to stop
+repeating it."* The backstop is that `render_raw_panel.sh` re-classifies every canonical result when it
+renders and prints a visible WARNING if one still looks degenerate, so a miss shows up in the output
+instead of quietly becoming the panel's answer.
+
+### Bounded automatic retry for Gemini
+
+A transient `agy` timeout used to mean re-running the panelist by hand at a larger `FUSION_TIMEOUT`.
+Attempt 1 now runs at `FUSION_TIMEOUT`; if it fails for a **transient** reason it retries **once** at
+double the timeout, in a completely fresh attempt directory and workspace so attempt 2 can never read
+attempt 1's stdout, log, parsed result or transcript. Two attempts maximum — no loop.
+
+Retried: the timeout backstop firing, agy reporting a timeout / deadline exceeded / temporarily
+unavailable / connection reset, or an empty result that came with timeout evidence. **Never** retried,
+because a second attempt cannot change them: a routed-model mismatch, an unavailable pinned model, an
+authentication or quota rejection needing user action, a rejected stale transcript, bad usage, or any
+error with no transient evidence. The deny-list is checked first, so *"auth failed after timeout"* is not
+retried. Retry evidence deliberately excludes agy's own `--log-file`, which echoes the `--print-timeout`
+flag we pass and would otherwise make every failure look transient.
+
+Provenance records the whole attempt history: `attempts`, `attempt_1_status`, `attempt_1_exit_code`,
+`retry_reason`, `attempt_2_status`, `final_status`.
+
+### Raw panel outputs are shown, not summarized
+
+A final answer that only *describes* what each panelist said is unauditable — you cannot tell a real
+disagreement from the judge's paraphrase, and a panelist that was factually wrong reads the same as one
+that was right. Every run now renders a delimited section above the analysis:
+
+```
+==================================================
+RAW PANEL OUTPUTS
+==================================================
+### [gemini (Gemini 3.1 Pro High)]
+- Backend: agy
+- Model: gemini-3.1-pro-high
+- Model verified: true (routed: Gemini 3.1 Pro (High))
+- Transport: json
+- Governance profile: karpathy-engineering-v1
+- Artifact: …/gemini_out.md (658 characters, 658 bytes)
+
+<the panelist's answer, verbatim>
+==================================================
+END RAW PANEL OUTPUTS
+==================================================
+```
+
+Identity comes from the runner's own provenance, never from claims made in the answer text. It reads the
+canonical result, so a recovered Claude panelist shows its recovered answer and never the sentinel it
+replaced. An answer past the preview budget is truncated **explicitly**, naming the character count and
+the on-disk artifact that still holds it in full — never silently shortened. `JUDGE / SYNTHESIS` follows
+as its own section, so panel output, judge interpretation and final synthesis stay visibly distinct.
+
+### Gemini engineering governance
+
+Gemini panelists run under a durable behavioral profile, `karpathy-engineering-v1`: think before coding,
+simplicity first, surgical changes, goal-driven execution, evidence over confidence, panel independence,
+no silent requirement drift, verify before claiming success.
+
+It is defined **once**, in `references/gemini_governance.md`, and injected **once**, by `run_gemini.sh` —
+the single point every Gemini execution path passes through, so `/z3fusion-gemini`, the Gemini slot of
+`/z3fusion-3` and any `<model>@agy` slot are all covered without the block being duplicated into any
+command file. A prompt that already carries the profile marker is passed through untouched. The block is a
+preamble: the task follows it and stays authoritative about *what* to produce. It tells the panelist to
+resolve minor ambiguity by stating an assumption and continuing, so it never turns uncertainty into a
+refusal. Claude and Codex panelists are unaffected. Each run records `governance_profile`; if the profile
+file is missing the runner **fails closed** rather than running an ungoverned panelist.
 
 ### Layered Gemini output transport
 
@@ -313,12 +398,22 @@ Alongside the run record in `~/.claude/z3fusion-runs/`, runners write `<answer_f
   "model_pin_verified": true,
   "exit_code": 0,
   "output_transport": "json",
-  "conversation_id": "..."
+  "conversation_id": "...",
+  "attempts": 1,
+  "attempt_1_status": "success",
+  "attempt_1_exit_code": 0,
+  "retry_reason": null,
+  "attempt_2_status": "not-run",
+  "final_status": "success",
+  "governance_profile": "karpathy-engineering-v1",
+  "governance_injected": true
 }
 ```
 
-A recovered Claude panelist records `result_transport: recovered-task-output` plus the `relay_anomaly` that
-triggered it; one that returned cleanly is `result_transport: normal`.
+A Claude panelist records how its relay actually arrived: `result_transport` (`normal` or
+`recovered-task-output`), `relay_classification`, `relay_anomaly`, and `relay_wrapper_detected` /
+`relay_wrapper_type` when a harness envelope was stripped. If wrappers came off an otherwise healthy
+relay, the untouched original is kept at `<answer_file>.raw` — nothing is discarded silently.
 
 ## What's in here
 
@@ -328,21 +423,23 @@ skills/z3fusion/
   scripts/
     _fusion_lib.sh          shared helpers: perl-based per-panelist timeout, have(), JSON content extraction
     agy_transcript.py       compatibility fallback: reads one agy run's answer back from its own transcript
-    claude_relay.py         validates an Agent result; recovers a completed panelist's answer by agentId
+    claude_relay.py         normalizes an Agent relay (strips harness wrappers), classifies it, recovers a completed panelist's answer by agentId
     detect_panel.sh         reports every reachable runner + recommends a legacy preset
     preflight.sh            non-blocking token/call estimate + Codex cap reminder
     run_panelist.sh         generic dispatcher: model@runner -> the right runner below
     run_codex.sh            runs a GPT-family panelist via codex exec (web + bash, timeout, optional --model)
-    run_gemini.sh           runs a Gemini-family panelist via agy (pinned --model, json → text → transcript)
+    run_gemini.sh           runs a Gemini-family panelist via agy (pinned --model, governance injection, bounded retry, json → text → transcript)
     run_ollama.sh           runs a fully local Ollama panelist (CLI + REST fallback, zero API key)
     run_openai_compat.sh    runs any OpenAI-chat-completions-compatible HTTP panelist (OpenRouter, hosted APIs, local servers)
     providers.sh            built-in provider table + ~/.claude/z3fusion-runners.json loader
+    render_raw_panel.sh     renders the RAW PANEL OUTPUTS section: each panelist's answer + its provenance
     save_run.sh             writes the timestamped provenance .md to ~/.claude/z3fusion-runs/
   references/
     panel.md                why independent parallel runs (no lenses) — the panel mechanism
     judge_rubric.md         Track A (merge & verify) / Track B (structured synthesis) rubric
+    gemini_governance.md    the karpathy-engineering-v1 profile injected into every Gemini prompt
   tests/
-    run_tests.sh            34 assertions: model pin, relay recovery, transports, hardening (no network)
+    run_tests.sh            78 assertions: model pin, relay normalization/recovery, bounded retry, transports, raw-output rendering, governance, hardening
     mock_agy.sh             stand-in `agy` on PATH so the transport paths are testable offline
 skills/z3fusion-plan/
   SKILL.md                  OMC interview → 3-round seeded panel → concise .omc/plans/ → review/execute
