@@ -429,6 +429,7 @@ skills/z3fusion/
     run_panelist.sh         generic dispatcher: model@runner -> the right runner below
     run_codex.sh            runs a GPT-family panelist via codex exec (web + bash, timeout, optional --model)
     run_gemini.sh           runs a Gemini-family panelist via agy (pinned --model, governance injection, bounded retry, json → text → transcript)
+    gemini_heavy.sh         opt-in long-mission lifecycle for run_gemini.sh: supervised attempts, TTK checkpoint, attempt fusion, job re-attach
     run_ollama.sh           runs a fully local Ollama panelist (CLI + REST fallback, zero API key)
     run_openai_compat.sh    runs any OpenAI-chat-completions-compatible HTTP panelist (OpenRouter, hosted APIs, local servers)
     providers.sh            built-in provider table + ~/.claude/z3fusion-runners.json loader
@@ -439,7 +440,7 @@ skills/z3fusion/
     judge_rubric.md         Track A (merge & verify) / Track B (structured synthesis) rubric
     gemini_governance.md    the karpathy-engineering-v1 profile injected into every Gemini prompt
   tests/
-    run_tests.sh            78 assertions: model pin, relay normalization/recovery, bounded retry, transports, raw-output rendering, governance, hardening
+    run_tests.sh            101 assertions: model pin, relay normalization/recovery, bounded retry, transports, raw-output rendering, governance, heavy lifecycle, hardening
     mock_agy.sh             stand-in `agy` on PATH so the transport paths are testable offline
 skills/z3fusion-plan/
   SKILL.md                  OMC interview → 3-round seeded panel → concise .omc/plans/ → review/execute

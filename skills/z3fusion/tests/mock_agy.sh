@@ -166,6 +166,44 @@ case "${MOCK_AGY_MODE:-json_ok}" in
     exit 0
     ;;
 
+  ttk|ttk_then_ok)
+    # Simulates reaching the per-attempt time-to-kill boundary the way real agy 1.1.8 does:
+    # partial work already persisted to its own transcript (verified live — agy accumulates
+    # PLANNER_RESPONSE turns DURING a run), then exit 1 with "timeout waiting for response"
+    # and no answer on stdout. The checkpoint stage must rebuild the answer from that transcript.
+    if [ "${MOCK_AGY_MODE}" = "ttk_then_ok" ] && [ "$attempt_n" -ge 3 ]; then
+      printf '{"conversation_id":"%s","status":"SUCCESS","response":"MOCK-FUSION-ANSWER: attempt 01 supplied the architecture, attempt 02 supplied the fix and the tests.","duration_seconds":1.0,"num_turns":1}\n' "$conv"
+      exit 0
+    fi
+    if [ "${MOCK_AGY_MODE}" = "ttk_then_ok" ] && [ "$attempt_n" -eq 2 ]; then
+      printf '{"conversation_id":"%s","status":"SUCCESS","response":"MOCK-ATTEMPT-02-ANSWER: found and fixed three integration problems, completed the test suite.","duration_seconds":1.0,"num_turns":1}\n' "$conv"
+      exit 0
+    fi
+    if [ -n "${AGY_CLI_DIR:-}" ]; then
+      tdir="$AGY_CLI_DIR/brain/$conv/.system_generated/logs"
+      mkdir -p "$tdir" "$AGY_CLI_DIR/cache"
+      printf '%s\n' \
+        '{"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"the mission"}' \
+        '{"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"MOCK-PARTIAL-WORK-1: surveyed the repository and drafted the component architecture."}' \
+        '{"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"MOCK-PARTIAL-WORK-2: implemented the layout and the three leaf components."}' \
+        > "$tdir/transcript.jsonl"
+      ws="$PWD"
+      command -v cygpath >/dev/null 2>&1 && ws="$(cygpath -w "$PWD" 2>/dev/null || printf '%s' "$PWD")"
+      WS="$ws" CONV="$conv" LCJ="$AGY_CLI_DIR/cache/last_conversations.json" python - <<'PYEOF'
+import json, os
+path = os.environ["LCJ"]
+try:
+    data = json.load(open(path, encoding="utf-8"))
+except Exception:
+    data = {}
+data[os.environ["WS"]] = os.environ["CONV"]
+json.dump(data, open(path, "w", encoding="utf-8"), indent=1)
+PYEOF
+    fi
+    printf '{"conversation_id":"","status":"ERROR","response":"","error":"timeout waiting for response"}\n'
+    exit 1
+    ;;
+
   auth_error)
     # Deterministic: needs the user to log in. Retrying cannot fix it and must not happen.
     printf '{"conversation_id":"","status":"ERROR","response":"","error":"You are not logged into Antigravity. Run agy login."}\n'
