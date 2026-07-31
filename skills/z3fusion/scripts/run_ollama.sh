@@ -22,7 +22,7 @@
 #   Path B (fallback) : used if the CLI is absent, OR Path A produced empty output after
 #                        stripping. POSTs to the local Ollama server's OpenAI-less native API
 #                        (http://localhost:11434/api/chat, stream:false) via an inline python3
-#                        heredoc (no jq dependency, mirroring run_gemini.sh / agy_capture.py's
+#                        heredoc (no jq dependency, mirroring run_gemini.sh / agy_transcript.py's
 #                        python3-based JSON handling), after confirming the server is up via
 #                        GET http://localhost:11434/api/tags.
 #
@@ -162,7 +162,7 @@ import sys
 # LLM answers routinely contain non-ASCII glyphs (em-dashes, smart quotes, math symbols).
 # On Windows, Python defaults stdout to cp1252 when redirected to a file, which raises
 # UnicodeEncodeError mid-write and leaves output_file empty/truncated. Force UTF-8
-# (mirrors agy_capture.py's identical guard).
+# (mirrors agy_transcript.py's identical guard).
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 except Exception:

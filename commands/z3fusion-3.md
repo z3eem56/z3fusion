@@ -3,10 +3,10 @@ description: z3Fusion full panel — an in-session Claude panelist + GPT-5.6 Sol
 argument-hint: <your question>
 ---
 Invoke the **z3fusion** skill on the task below, forcing the richest legacy panel `claude-gpt5.6-gemini3.1pro`:
-an in-session Claude panelist (Agent subagent), GPT-5.6 Sol (via `codex exec`), and Gemini 3.1 Pro (via `agy`,
-pseudo-TTY) answer the SAME prompt IN PARALLEL, each independently with web + bash and none seeing the
-others' work → the orchestrating Claude Code session judges all three and writes the final answer grounded
-in the analysis.
+an in-session Claude panelist (Agent subagent), GPT-5.6 Sol (via `codex exec`), and Gemini 3.1 Pro (via
+`agy`, hard-pinned to `gemini-3.1-pro-high`) answer the SAME prompt IN PARALLEL, each independently with
+web + bash and none seeing the others' work → the orchestrating Claude Code session judges all three and
+writes the final answer grounded in the analysis.
 
 Follow the skill's SKILL.md exactly (preflight → fan out in parallel → judge picking the track that fits
 the task → grounded final deliverable → save provenance → present). For a research/analysis task, present

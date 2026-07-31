@@ -82,7 +82,7 @@ so you can see everything else that is composable beyond those 4 presets.
 | --- | --- | --- |
 | `claude-claude` | the same prompt run twice as 2 independent in-session Claude panelists | nothing — always available |
 | `claude-gpt5.6` | in-session Claude + GPT-5.6 Sol in parallel | `codex` CLI |
-| `claude-gemini3.1pro` | in-session Claude + Gemini 3.1 Pro in parallel | `agy` CLI |
+| `claude-gemini3.1pro` | in-session Claude + Gemini 3.1 Pro (pinned `gemini-3.1-pro-high`) in parallel | `agy` CLI |
 | `claude-gpt5.6-gemini3.1pro` | in-session Claude + GPT-5.6 Sol + Gemini 3.1 Pro in parallel | `codex` + `agy` CLIs |
 
 Beyond these 4 presets, compose an ad hoc panel with `--models` — a comma-separated list of `model@runner`
@@ -128,6 +128,37 @@ Launch **all panelists in a single turn** so they run concurrently:
   subagent per `@claude` slot alongside the other panelists. Spawn them in the same message so they run at
   once. When each returns, write its answer to a temp file for provenance: `/tmp/z3fusion_opusA.md` (and
   `/tmp/z3fusion_opusB.md` for a second Claude run, etc.).
+
+  **Validate the relay before trusting it — a completed Claude panelist can return a sentinel.**
+  An `Agent` call can come back `status: completed`, with real token spend and real tool use, while the
+  text relayed to you is just `Idle.` (observed cause: a `SubagentStop` hook re-waking an already-finished
+  subagent until its last message degenerates; the Agent tool returns that last message). The real answer
+  is **not lost** — it is in the subagent's own transcript. Never treat this as an empty panelist.
+
+  ```bash
+  # 1. Is the relayed text a real answer?  exit 0 = normal, exit 3 = suspicious.
+  bash -c 'python <skill_dir>/scripts/claude_relay.py classify --file /tmp/z3fusion_opusA.md'
+
+  # 2. Only if suspicious: recover the completed task output, keyed on the agentId the Agent
+  #    tool reported for THAT call (never a reconstructed path, never another agent's id).
+  #    Pass the relayed text too, so provenance names the real anomaly.
+  python <skill_dir>/scripts/claude_relay.py recover \
+    --agent-id <agentId from the Agent result> --agent-status completed \
+    --relayed-text "<the text the Agent tool returned>" \
+    --out /tmp/z3fusion_opusA.md
+  ```
+
+  A result is suspicious when it is empty, whitespace-only, `Idle.` (or an `Idle …` variant), another bare
+  status sentinel, harness metadata rather than an answer, or implausibly short. `recover` refuses to read
+  anything unless the agent actually completed, so a still-running agent is never scraped for partial
+  output. It writes the recovered answer into the same canonical panel-result file a normal return would
+  have produced, plus `<file>.provenance.json` with `result_transport: recovered-task-output` and
+  `relay_anomaly: idle-sentinel`. A panelist recovered this way is **healthy** and goes to the judge
+  normally; record `result_transport: normal` for one that returned cleanly.
+
+  Fail the Claude panelist **only** when the agent errored, timed out, or `recover` exits non-zero (no
+  completed output exists, or nothing in it passes validation). A sentinel alone is never sufficient
+  grounds to drop the panelist — attempt recovery first.
 - **Every other panelist slot** (`codex`, `agy`, `ollama`, `openrouter`, `lmstudio`, or any custom runner
   registered in `~/.claude/z3fusion-runners.json`) → write its prompt to a temp file, then call the generic
   dispatcher:
@@ -149,10 +180,20 @@ Launch **all panelists in a single turn** so they run concurrently:
     final answer to the output file; read it once it finishes. The slot's model half is passed through to
     codex's own `--model` flag when non-empty, so you can point this runner at a different GPT-family model
     without changing anything else about the call.
-  - `agy` runner (Gemini family, or whichever model the slot names) → calls `agy` under a pseudo-TTY
-    (working around agy bug #76, which emits empty stdout with no TTY) with a transcript-JSONL fallback and
-    a hard anti-empty guard, so it never returns a silently empty answer. The slot's model half is exported
-    as `AGY_MODEL` before invoking agy.
+  - `agy` runner (Gemini family, or whichever model the slot names) → calls `agy --print` with an
+    **explicit `--model`, always**. The slot's model half is exported as `AGY_MODEL`; the runner normalizes
+    a logical name to the exact runtime id `agy models` reports, so `gemini-3.1-pro@agy` (and the
+    `claude-gemini3.1pro` preset) resolve to **`gemini-3.1-pro-high`**. agy's own configured default is
+    never used, and no other Gemini tier is ever substituted: if the pinned model is not listed by
+    `agy models`, the panelist fails with `required model unavailable: <model>` instead of running
+    something else. Output uses a layered transport — `--output-format json` (native, preferred), then
+    plain `--output-format text` if the structured output is unusable, then agy's own on-disk transcript as
+    a Windows compatibility fallback for the historical empty-stdout behavior (agy bug #76, fixed in
+    1.1.8). Each invocation runs in its own fresh workspace so the fallback can only ever read *this*
+    run's conversation, and a transcript older than the invocation is rejected rather than accepted as the
+    answer. `exit 0` with empty output is not success, and a non-zero exit is never masked by the
+    fallback. The runner writes `<output_file>.provenance.json` (`model`, `model_pin_verified`,
+    `exit_code`, `output_transport`, `conversation_id`) and echoes the same one-liner on stdout.
   - `ollama` runner (any locally-pulled model, zero API key) → prefers the `ollama` CLI, piping the prompt
     on stdin and stripping ANSI/control bytes from the captured output; falls back to the local
     `http://localhost:11434/api/chat` REST endpoint if the CLI is absent or produced empty output.
@@ -238,7 +279,12 @@ bash <skill_dir>/scripts/save_run.sh <SLUG> /tmp/z3fusion_question.txt /tmp/z3fu
 ```
 
 (`save_run.sh` substitutes a placeholder for any answer file that is missing or empty, so a degraded panel
-still produces a complete record.) For a custom `--models` panel, pass one `label=path` pair per panelist
+still produces a complete record.) Runners that wrote a `<answer_file>.provenance.json` — the `agy` runner
+always, a Claude panelist whenever its relay had to be recovered — record how that answer actually reached
+you; fold those fields into the run note so the record says which model really answered and over which
+transport. The fields are: `model` / `requested_model` / `model_pin_verified` / `runtime_backend` /
+`exit_code` / `output_transport` (`json`, `stdout-text`, `windows-transcript-fallback`) for `agy`, and
+`result_transport` (`normal` or `recovered-task-output`) plus `relay_anomaly` for a Claude panelist. For a custom `--models` panel, pass one `label=path` pair per panelist
 actually launched — label each with its `model@runner` slot (e.g. `llama4@ollama=$fusion_run_dir/ollama_out.md`)
 instead of the legacy `opus-A`/`gpt5.6`/`gemini` labels above.
 

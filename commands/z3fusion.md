@@ -26,7 +26,8 @@ forcing one fixed legacy slug.
   external script involved.
 - `model@codex` runs that model through `codex exec` (GPT family, local subscription, full local tool
   access against a throwaway copy of the workdir).
-- `model@agy` runs that model through `agy` / Antigravity under a pseudo-TTY (Gemini family today).
+- `model@agy` runs that model through `agy` / Antigravity with an explicit `--model` pin and its routing
+  verified after the run (Gemini family today); `gemini-3.1-pro@agy` resolves to `gemini-3.1-pro-high`.
 - `model@ollama` runs a fully local model via the Ollama CLI/server — zero API key required, e.g.
   `llama4@ollama` or `qwen3.6-coder@ollama`.
 - `model@<provider>` for any other runner name dispatches through `scripts/run_panelist.sh`, which resolves
