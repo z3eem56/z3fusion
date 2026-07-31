@@ -7,9 +7,15 @@ an in-session Claude panelist (Agent subagent) and Gemini 3.1 Pro (via `agy`) an
 prompt IN PARALLEL, each independently with web + bash and neither seeing the other's work → the
 orchestrating Claude Code session judges both answers and writes the final answer grounded in the analysis.
 
-The Gemini slot is **hard-pinned to `gemini-3.1-pro-high`** — the runner always passes
-`--model gemini-3.1-pro-high` to `agy`, never falls back to Flash, another Pro tier, or agy's configured
-default, and fails the panelist outright if that model is unavailable.
+The Gemini slot is **hard-pinned to `gemini-3.1-pro-high`** — the runner always passes an explicit
+`--model` to `agy`, verifies from agy's own log which model it actually routed to, never falls back to
+Flash, another Pro tier, or agy's configured default, and fails the panelist outright if that model is
+unavailable or if agy routed elsewhere.
+
+The Gemini panelist runs under the **`karpathy-engineering-v1`** engineering governance profile, injected
+by `scripts/run_gemini.sh` from `references/gemini_governance.md`. Do not restate it here or in the panel
+prompt — it is injected exactly once, at the runner. If `agy` fails transiently (a timeout), the runner
+retries **once** automatically at double the timeout; deterministic failures are not retried.
 
 Follow the skill's SKILL.md exactly (preflight → fan out in parallel → judge picking the track that fits the
 task → grounded final deliverable → save provenance → present). For a research/analysis task present the
@@ -22,10 +28,17 @@ If the `agy` CLI is missing or the Gemini panelist fails/times out, drop it, rec
 note, and fall back to `claude-claude` (spawn a second independent in-session Claude panelist) so the judge
 still sees two blind answers — never abort because one CLI failed.
 
-If the Claude panelist's `Agent` call returns `Idle.` or another empty/sentinel result, do NOT treat it as
-a failed panelist: follow SKILL.md Step 2 and run `scripts/claude_relay.py classify`, then `recover
---agent-id <agentId>` to pull the completed answer back. A recovered panelist is healthy and goes to the
-judge like any other; only a genuinely unrecoverable one is dropped.
+Always run `scripts/claude_relay.py normalize --file <relay> --agent-id <agentId> --agent-status completed
+--out <canonical>` on the Claude panelist's `Agent` result before the judge sees it (SKILL.md Step 2). A
+completed subagent can relay `Idle.`, a wake-up reply, or a sentinel wrapped in a `SECURITY WARNING:`
+block plus an `agentId:`/`<usage>` trailer that makes it *look* like an answer — normalize strips the
+harness envelope, classifies the actual answer, and recovers the completed task output when needed. A
+recovered panelist is healthy and goes to the judge like any other; only a genuinely unrecoverable one is
+dropped.
+
+Present the result per SKILL.md Step 6: the deliverable, then a verbatim `RAW PANEL OUTPUTS` section from
+`scripts/render_raw_panel.sh` showing what each panelist actually produced, then your `JUDGE / SYNTHESIS`
+section. Do not paraphrase a panelist's answer in the raw section.
 
 For a custom panel beyond this fixed 2-model preset — any mix of models, providers, or local runners — use
 `/z3fusion --models <model@runner,...> :: <question>` instead.

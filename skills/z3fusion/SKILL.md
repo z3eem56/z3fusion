@@ -129,36 +129,50 @@ Launch **all panelists in a single turn** so they run concurrently:
   once. When each returns, write its answer to a temp file for provenance: `/tmp/z3fusion_opusA.md` (and
   `/tmp/z3fusion_opusB.md` for a second Claude run, etc.).
 
-  **Validate the relay before trusting it — a completed Claude panelist can return a sentinel.**
-  An `Agent` call can come back `status: completed`, with real token spend and real tool use, while the
-  text relayed to you is just `Idle.` (observed cause: a `SubagentStop` hook re-waking an already-finished
-  subagent until its last message degenerates; the Agent tool returns that last message). The real answer
-  is **not lost** — it is in the subagent's own transcript. Never treat this as an empty panelist.
+  **Normalize the relay before trusting it — a completed Claude panelist can return a sentinel, and
+  the harness can dress that sentinel up as an answer.** An `Agent` call can come back
+  `status: completed`, with real token spend and real tool use, while the text relayed to you is just
+  `Idle.` (observed cause: a `SubagentStop` hook re-waking an already-finished subagent until its last
+  message degenerates; the Agent tool returns that last message). Worse, the harness wraps that relay in
+  its own bookkeeping — a `SECURITY WARNING:` block, the `agentId: … (use SendMessage …)` trailer, a
+  `<usage>` element — all glued onto the **same line**, which makes a 700-char blob that *looks* like an
+  answer and is not. The real answer is **not lost** — it is in the subagent's own transcript. Never
+  treat this as an empty panelist.
+
+  **Always run this once per Claude panelist, before the judge sees anything:**
 
   ```bash
-  # 1. Is the relayed text a real answer?  exit 0 = normal, exit 3 = suspicious.
-  bash -c 'python <skill_dir>/scripts/claude_relay.py classify --file /tmp/z3fusion_opusA.md'
-
-  # 2. Only if suspicious: recover the completed task output, keyed on the agentId the Agent
-  #    tool reported for THAT call (never a reconstructed path, never another agent's id).
-  #    Pass the relayed text too, so provenance names the real anomaly.
-  python <skill_dir>/scripts/claude_relay.py recover \
+  # Write the Agent tool's relayed text to a file first, then normalize it. This single call
+  # strips harness wrappers, classifies the ANSWER (not the envelope), recovers the completed
+  # task output when the answer is degenerate, and writes the CANONICAL panel result.
+  python <skill_dir>/scripts/claude_relay.py normalize \
+    --file "$fusion_run_dir/opusA_relay.md" \
     --agent-id <agentId from the Agent result> --agent-status completed \
-    --relayed-text "<the text the Agent tool returned>" \
-    --out /tmp/z3fusion_opusA.md
+    --out "$fusion_run_dir/opusA_out.md"
+  # exit 0 -> opusA_out.md holds a validated answer (normal, or recovered)
+  # exit 1 -> no usable answer exists; only now fail this panelist
   ```
 
-  A result is suspicious when it is empty, whitespace-only, `Idle.` (or an `Idle …` variant), another bare
-  status sentinel, harness metadata rather than an answer, or implausibly short. `recover` refuses to read
-  anything unless the agent actually completed, so a still-running agent is never scraped for partial
-  output. It writes the recovered answer into the same canonical panel-result file a normal return would
-  have produced, plus `<file>.provenance.json` with `result_transport: recovered-task-output` and
-  `relay_anomaly: idle-sentinel`. A panelist recovered this way is **healthy** and goes to the judge
-  normally; record `result_transport: normal` for one that returned cleanly.
+  Wrappers are stripped structurally and anchored to the shapes the harness actually emits, so an answer
+  that merely *discusses* a security warning, an agent or a tool is never touched. After stripping, the
+  answer is suspicious when it is empty, whitespace-only, `Idle.` / `No action.` or another bare status
+  sentinel, a wake-up reply ("No new input received…"), harness metadata only, or implausibly short.
+  Recovery is keyed on the `agentId` the Agent tool reported — never a reconstructed path — and refuses
+  to read anything unless the agent actually completed, so a still-running agent is never scraped for
+  partial output.
 
-  Fail the Claude panelist **only** when the agent errored, timed out, or `recover` exits non-zero (no
+  `normalize` writes `<out>.provenance.json` with `relay_wrapper_detected`, `relay_wrapper_type`,
+  `relay_classification` (`normal`/`suspicious`), `relay_anomaly`, and `result_transport`
+  (`normal` or `recovered-task-output`). When wrappers were stripped from an otherwise healthy relay, the
+  untouched original is kept at `<out>.raw` — nothing is discarded silently. A panelist recovered this way
+  is **healthy** and goes to the judge normally.
+
+  (`classify` and `recover` remain available as separate steps for inspection; `normalize` is the one to
+  use in the pipeline, because it cannot be half-followed.)
+
+  Fail the Claude panelist **only** when the agent errored, timed out, or `normalize` exits non-zero (no
   completed output exists, or nothing in it passes validation). A sentinel alone is never sufficient
-  grounds to drop the panelist — attempt recovery first.
+  grounds to drop the panelist — normalization and recovery run first.
 - **Every other panelist slot** (`codex`, `agy`, `ollama`, `openrouter`, `lmstudio`, or any custom runner
   registered in `~/.claude/z3fusion-runners.json`) → write its prompt to a temp file, then call the generic
   dispatcher:
@@ -189,11 +203,25 @@ Launch **all panelists in a single turn** so they run concurrently:
     something else. Output uses a layered transport — `--output-format json` (native, preferred), then
     plain `--output-format text` if the structured output is unusable, then agy's own on-disk transcript as
     a Windows compatibility fallback for the historical empty-stdout behavior (agy bug #76, fixed in
-    1.1.8). Each invocation runs in its own fresh workspace so the fallback can only ever read *this*
-    run's conversation, and a transcript older than the invocation is rejected rather than accepted as the
+    1.1.8). Each attempt runs in its own fresh workspace so the fallback can only ever read *that*
+    attempt's conversation, and a transcript older than the attempt is rejected rather than accepted as the
     answer. `exit 0` with empty output is not success, and a non-zero exit is never masked by the
-    fallback. The runner writes `<output_file>.provenance.json` (`model`, `model_pin_verified`,
-    `exit_code`, `output_transport`, `conversation_id`) and echoes the same one-liner on stdout.
+    fallback.
+
+    The runner also applies a **bounded automatic retry**: if attempt 1 fails for a *transient* reason
+    (a timeout, or an empty result that came with timeout evidence), it retries **once** at double the
+    timeout in a completely fresh attempt directory and workspace — you no longer re-run it by hand at a
+    larger `FUSION_TIMEOUT`. Deterministic failures are **never** retried, because a second attempt
+    cannot change them: a routed-model mismatch, an unavailable pinned model, an authentication/quota
+    rejection, a rejected stale transcript, or any error with no transient evidence. Two attempts
+    maximum.
+
+    Every Gemini prompt is prefixed with the **Gemini engineering governance** block (profile
+    `karpathy-engineering-v1`, defined in `references/gemini_governance.md`) — see "Gemini governance"
+    below. The runner writes `<output_file>.provenance.json` (`model`, `model_pin_verified`,
+    `routed_model_label`, `exit_code`, `output_transport`, `conversation_id`, `attempts`,
+    `attempt_1_status`, `attempt_1_exit_code`, `retry_reason`, `attempt_2_status`, `final_status`,
+    `governance_profile`, `governance_injected`) and echoes the same one-liner on stdout.
   - `ollama` runner (any locally-pulled model, zero API key) → prefers the `ollama` CLI, piping the prompt
     on stdin and stripping ANSI/control bytes from the captured output; falls back to the local
     `http://localhost:11434/api/chat` REST endpoint if the CLI is absent or produced empty output.
@@ -230,6 +258,23 @@ runs, zero external CLI). For `claude-gemini3.1pro`, dropping Gemini falls back 
 second independent Claude panelist) so the judge still sees two blind answers. For a custom `--models`
 panel, the same rule applies generically: drop any failed slot, note the degradation, and continue with
 whatever panelists remain. A degraded run still completes; never abort because one runner failed.
+
+**Gemini governance (profile `karpathy-engineering-v1`).** Gemini panelists run under a durable
+behavioral profile: think before coding, simplicity first, surgical changes, goal-driven execution,
+evidence over confidence, panel independence, no silent requirement drift, verify before claiming
+success. It is defined **once**, in `references/gemini_governance.md`, and injected **once**, by
+`scripts/run_gemini.sh`, which is the single point every Gemini execution path passes through
+(`/z3fusion-gemini`, the Gemini slot of `/z3fusion-3`, and any `<model>@agy` slot of `/z3fusion --models`
+all reach agy via `run_panelist.sh` → `run_gemini.sh`). Do not paste the block into a command file or a
+panel prompt — a prompt that already carries the profile marker is passed through untouched, so the block
+appears exactly once either way.
+
+The block is a **preamble**: the user's task follows it and stays authoritative about *what* to produce;
+the governance only constrains *how* the panelist works. It explicitly tells the panelist to resolve minor
+ambiguity by stating an assumption and continuing, so it never turns uncertainty into a refusal. It
+applies to Gemini only — Claude and Codex panelists are untouched. Each Gemini run records
+`governance_profile` and `governance_injected` in its provenance. If the governance file is missing the
+runner **fails closed** (exit 2) rather than running an ungoverned panelist.
 
 ## Step 3 — Judge (pick the track that fits the task)
 
@@ -282,20 +327,62 @@ bash <skill_dir>/scripts/save_run.sh <SLUG> /tmp/z3fusion_question.txt /tmp/z3fu
 still produces a complete record.) Runners that wrote a `<answer_file>.provenance.json` — the `agy` runner
 always, a Claude panelist whenever its relay had to be recovered — record how that answer actually reached
 you; fold those fields into the run note so the record says which model really answered and over which
-transport. The fields are: `model` / `requested_model` / `model_pin_verified` / `runtime_backend` /
-`exit_code` / `output_transport` (`json`, `stdout-text`, `windows-transcript-fallback`) for `agy`, and
-`result_transport` (`normal` or `recovered-task-output`) plus `relay_anomaly` for a Claude panelist. For a custom `--models` panel, pass one `label=path` pair per panelist
+transport. The fields are: `model` / `requested_model` / `model_pin_verified` / `routed_model_label` /
+`runtime_backend` / `exit_code` / `output_transport` (`json`, `stdout-text`,
+`windows-transcript-fallback`) / `attempts` / `attempt_1_status` / `attempt_1_exit_code` /
+`retry_reason` / `attempt_2_status` / `final_status` / `governance_profile` / `governance_injected` for
+`agy`, and `result_transport` (`normal` or `recovered-task-output`) / `relay_classification` /
+`relay_anomaly` / `relay_wrapper_detected` / `relay_wrapper_type` for a Claude panelist. If a Gemini
+panelist needed its automatic retry, or a Claude relay had a harness wrapper stripped or had to be
+recovered, put that in the degradation note — those are facts about the run, not implementation details.
+For a custom `--models` panel, pass one `label=path` pair per panelist
 actually launched — label each with its `model@runner` slot (e.g. `llama4@ollama=$fusion_run_dir/ollama_out.md`)
 instead of the legacy `opus-A`/`gpt5.6`/`gemini` labels above.
 
 ## Step 6 — Present
 
 Lead with the **final deliverable** — the merged working artifact (Track A) or the grounded answer
-(Track B) — then the audit trail beneath it: for code, what each candidate did when run + the
-merge rationale + what you verified; for research, the five-section analysis. Name the panel slug (or the
-composed `--models` list) you ran and which panelists participated. If the panel downgraded because a
+(Track B). Then, **before** the analysis, show what each panelist actually said, by running:
+
+```bash
+bash <skill_dir>/scripts/render_raw_panel.sh \
+  "opus-A=$fusion_run_dir/opusA_out.md" "gemini=$fusion_run_dir/gemini_out.md"
+```
+
+Paste its output **verbatim**. It prints a delimited `RAW PANEL OUTPUTS` section: per panelist, the model
+identity, backend, whether the model pin was verified and which transport the answer arrived on (read from
+the runner's own provenance, never from claims made in the answer text), followed by that panelist's
+canonical answer. Then write your own `JUDGE / SYNTHESIS` heading and put the analysis under it, so the
+three layers stay visibly distinct:
+
+```
+==================================================
+RAW PANEL OUTPUTS          <- verbatim, from render_raw_panel.sh
+==================================================
+...
+==================================================
+END RAW PANEL OUTPUTS
+==================================================
+
+==================================================
+JUDGE / SYNTHESIS          <- your analysis and final answer
+==================================================
+```
+
+Why this is mandatory: a result that only *summarizes* a panelist is unauditable — the operator cannot
+tell a real disagreement from a judge's paraphrase, and a panelist that was factually wrong looks the same
+as one that was right. **Do not paraphrase raw panel answers in that section.** It reads the canonical
+result file, so a recovered Claude panelist shows its recovered answer and never the sentinel it replaced.
+An answer past the preview budget is shown truncated **explicitly**, naming the character count and the
+on-disk artifact that still holds it in full — never silently shortened. Never include a panelist's hidden
+reasoning or scratch state; only the answer it actually returned.
+
+Finish with the rest of the audit trail: for code, what each candidate did when run + the merge rationale
++ what you verified; for research, the five-section analysis. Name the panel slug (or the composed
+`--models` list) you ran and which panelists participated. If the panel downgraded because a
 CLI/server/key was missing, say so and how to enable the fuller panel (install the missing CLI, start the
-local server, or set the missing API key).
+local server, or set the missing API key). Disclose run anomalies too — a Gemini retry, a stripped harness
+wrapper, a recovered relay.
 
 ## Cost & latency note
 

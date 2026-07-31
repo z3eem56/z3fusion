@@ -5,11 +5,17 @@
 # replays a canned agy 1.1.8 response selected by $MOCK_AGY_MODE.
 #
 # Env contract:
-#   MOCK_AGY_MODE     json_ok | json_empty | text_after_bad_json | nonzero | timeout_json
+#   MOCK_AGY_MODE     json_ok | json_unicode | json_empty | text_after_bad_json | nonzero
+#                     | timeout_always | timeout_bare | timeout_then_ok | auth_error
 #   MOCK_AGY_ARGV     file to append each invocation's argv to (one arg per line, "--" between)
 #   MOCK_AGY_NO_PIN   1 => `agy models` does NOT list gemini-3.1-pro-high
 #   MOCK_AGY_CONV     conversation id to report/write a transcript under
 #   MOCK_AGY_STALE    1 => back-date the written transcript so it predates the invocation
+#   MOCK_AGY_COUNT    file used to count print invocations, so a mode can behave differently
+#                     on attempt 1 vs attempt 2 (`agy models` never counts)
+#   MOCK_AGY_CWD      file to append the working directory of each print invocation to, so a
+#                     test can prove attempt 2 ran in a different workspace than attempt 1
+#   MOCK_AGY_PROMPT   file to write the verbatim `--print` argument to (last invocation wins)
 #   AGY_CLI_DIR       fake ~/.gemini/antigravity-cli root the transcript is written into
 
 set -uo pipefail
@@ -27,17 +33,36 @@ fi
 if [ -n "${MOCK_AGY_ARGV:-}" ]; then
   { printf '%s\n' "$@"; printf -- '--\n'; } >> "$MOCK_AGY_ARGV"
 fi
+if [ -n "${MOCK_AGY_CWD:-}" ]; then
+  printf '%s\n' "$PWD" >> "$MOCK_AGY_CWD"
+fi
+
+# Which print attempt is this? (`agy models` returned above, so it never inflates the count.)
+attempt_n=1
+if [ -n "${MOCK_AGY_COUNT:-}" ]; then
+  printf 'x' >> "$MOCK_AGY_COUNT"
+  attempt_n="$(wc -c < "$MOCK_AGY_COUNT" | tr -d ' ')"
+fi
 
 fmt="text"
 logfile=""
 model=""
+prompt_arg=""
 prev=""
 for a in "$@"; do
   [ "$prev" = "--output-format" ] && fmt="$a"
   [ "$prev" = "--log-file" ] && logfile="$a"
   [ "$prev" = "--model" ] && model="$a"
+  [ "$prev" = "--print" ] && prompt_arg="$a"
   prev="$a"
 done
+
+# The prompt is multi-line, so the one-arg-per-line argv log cannot be parsed back into it.
+# Capture it verbatim to its own file, which is what lets a test compare the composed prompt
+# byte for byte (governance injected exactly once, task preserved, nothing else added).
+if [ -n "${MOCK_AGY_PROMPT:-}" ]; then
+  printf '%s' "$prompt_arg" > "$MOCK_AGY_PROMPT"
+fi
 
 conv="${MOCK_AGY_CONV:-mock-conv-0001}"
 
@@ -115,6 +140,36 @@ case "${MOCK_AGY_MODE:-json_ok}" in
     _write_transcript
     printf '{"conversation_id":"","status":"ERROR","response":"","error":"upstream failure"}\n'
     exit 3
+    ;;
+
+  timeout_always)
+    # The transient failure actually observed in production: exit 1 + "timeout waiting for
+    # response" + no answer. Eligible for exactly one automatic retry.
+    printf '{"conversation_id":"","status":"ERROR","response":"","error":"timeout waiting for response"}\n'
+    exit 1
+    ;;
+
+  timeout_bare)
+    # Same condition surfaced without any structured result at all.
+    printf 'timeout waiting for response\n' >&2
+    exit 1
+    ;;
+
+  timeout_then_ok)
+    # Attempt 1 times out, attempt 2 answers — the case that previously needed a manual re-run
+    # at a longer FUSION_TIMEOUT.
+    if [ "$attempt_n" -le 1 ]; then
+      printf '{"conversation_id":"","status":"ERROR","response":"","error":"timeout waiting for response"}\n'
+      exit 1
+    fi
+    printf '{"conversation_id":"%s","status":"SUCCESS","response":"MOCK-RETRY-ANSWER: delivered on the second attempt.","duration_seconds":1.0,"num_turns":1}\n' "$conv"
+    exit 0
+    ;;
+
+  auth_error)
+    # Deterministic: needs the user to log in. Retrying cannot fix it and must not happen.
+    printf '{"conversation_id":"","status":"ERROR","response":"","error":"You are not logged into Antigravity. Run agy login."}\n'
+    exit 1
     ;;
 
   *)
