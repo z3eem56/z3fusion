@@ -16,7 +16,7 @@ description: >-
   and writes the final answer — the pipeline can't be reversed, because external panelist CLIs/APIs have no
   way to call back into this session. Runs on local CLI subscriptions or fully local models with no metered
   API required for the legacy presets, and can also reach metered provider APIs when configured. Saves a
-  timestamped provenance .md per run, and answers in english by default. Use this whenever the user asks to
+  timestamped provenance .md per run, and answers in French by default. Use this whenever the user asks to
   "run it through z3Fusion", says /z3fusion, wants a multi-model / panel / ensemble answer, wants a question
   cross-checked across models, or wants a higher-confidence answer with consensus and blind spots surfaced —
   even if they don't say "fusion". General-purpose: any topic (research, law, strategy, technical,
@@ -258,6 +258,43 @@ runs, zero external CLI). For `claude-gemini3.1pro`, dropping Gemini falls back 
 second independent Claude panelist) so the judge still sees two blind answers. For a custom `--models`
 panel, the same rule applies generically: drop any failed slot, note the degradation, and continue with
 whatever panelists remain. A degraded run still completes; never abort because one runner failed.
+
+**Heavy Gemini execution (hours, not minutes).** For a mission that legitimately runs for hours —
+repository-wide analysis, frontend implementation, iterative coding/testing/debugging — set
+`Z3F_GEMINI_HEAVY=1`. `run_gemini.sh` then delegates to `scripts/gemini_heavy.sh`, which runs an attempt
+lifecycle instead of one synchronous call:
+
+```
+ATTEMPT-01 (up to TTK, default 8h)
+   ├── completes ............ canonical = attempt-01. No attempt-02, no fusion. (fast path)
+   ├── reaches TTK .......... checkpoint + seal → ATTEMPT-02 (fresh context, same mission) → FUSION
+   └── deterministic failure  abort. A pin mismatch or auth rejection cannot be fixed by
+                              spending another 8 hours.
+```
+
+**TTK is a checkpoint boundary, not a discard.** When an attempt hits its time-to-kill, the work it had
+already completed is recovered from agy's own transcript (which accumulates model turns *during* a run,
+verified live) and preserved as that attempt's output with status `ttk-checkpoint`. A checkpoint still
+proves which model produced it — the routed label is read back from the attempt's preserved agy log,
+because a timed-out attempt never reaches the runner's own post-run routing check. Partial work is
+evidence, and it is fused in on merit, never discarded for being partial.
+
+**Attempts are isolated.** Each writes only inside its own artifact directory
+(`~/.claude/z3fusion-runs/jobs/<job-id>/gemini/attempt-0N/`), is sealed by a `status.json` written exactly
+once, and never shares a live output file. The canonical result is produced only by the fusion stage. A
+late-finishing attempt-01 therefore cannot overwrite attempt-02, the fusion output, or the canonical
+answer.
+
+**Long runs survive the caller.** The lifecycle runs under a detached supervisor with a heartbeat file, so
+it is not bounded by the ~10 minute limit on a foreground tool call. `run` waits up to `Z3F_WAIT_SECONDS`
+(default 540) and then exits **75** — meaning *still running, re-invoke to re-attach*, not failure.
+Re-invoking the same mission re-attaches to the same job (the job id is a hash of the mission prompt)
+rather than launching a second execution. "The caller stopped waiting" and "Gemini stopped running" are
+different states and are tracked separately.
+
+Fusion is a third pinned, routing-verified, governed Gemini call. It is **not** the panel judge — it
+produces the Gemini *slot's* single answer, which then goes to the orchestrating Claude session as one
+panelist among several. The panel judge is unchanged.
 
 **Gemini governance (profile `karpathy-engineering-v1`).** Gemini panelists run under a durable
 behavioral profile: think before coding, simplicity first, surgical changes, goal-driven execution,

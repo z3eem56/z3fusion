@@ -172,11 +172,30 @@ if [ ! -s "$governance_file" ]; then
   exit 2
 fi
 
+# Heavy/long-running missions (hours, not minutes) run under the attempt-lifecycle supervisor
+# instead of this single synchronous invocation: TTK checkpointing, attempt isolation, fusion
+# and job re-attach all live there. gemini_heavy.sh calls back into this script once per
+# attempt with Z3F_GEMINI_HEAVY=0, which is what terminates the delegation.
+if [ "${Z3F_GEMINI_HEAVY:-0}" = "1" ]; then
+  exec bash "$SCRIPT_DIR/gemini_heavy.sh" run "$prompt_file" "$output_file"
+fi
+
 mkdir -p "$(dirname "$output_file")" 2>/dev/null
 : > "$output_file"
 
-scratch="$(mktemp -d "${TMPDIR:-/tmp}/z3fusion-gemini.XXXXXX")"
-trap 'rm -rf "$scratch"' EXIT
+# Scratch holds each attempt's workspace, agy log, raw stdout and parsed result. Normally it is
+# a temp dir wiped on exit. When the caller sets Z3F_ARTIFACT_DIR it becomes a PERSISTENT
+# artifact dir that this script must not delete — the heavy-execution lifecycle
+# (gemini_heavy.sh) needs the agy log and the workspace to survive so a TTK checkpoint can be
+# recovered from that attempt's conversation after the process is gone. A cleanup trap here
+# would destroy exactly the evidence the checkpoint stage exists to preserve.
+if [ -n "${Z3F_ARTIFACT_DIR:-}" ]; then
+  scratch="$Z3F_ARTIFACT_DIR"
+  mkdir -p "$scratch"
+else
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/z3fusion-gemini.XXXXXX")"
+  trap 'rm -rf "$scratch"' EXIT
+fi
 
 provenance_file="${output_file}.provenance.json"
 transport=""
@@ -303,7 +322,12 @@ _fail_from_evidence() {
 # Deliberately EXCLUDES agy's --log-file: that log echoes the `--print-timeout` flag we pass,
 # so grepping it for "timeout" would make every failure look transient.
 _attempt_evidence() {
-  cat "$attempt_dir/stderr.$1" "$attempt_dir/stdout.$1" 2>/dev/null | tail -c 4000
+  # Strip the flags WE passed before matching. agy echoes its arguments in usage/validation
+  # errors, and we pass `--print-timeout 28800s` — so an unsanitized deterministic failure
+  # would contain the word "timeout" and be promoted to transient, buying a pointless second
+  # multi-hour attempt. Same reasoning as excluding --log-file from the evidence.
+  cat "$attempt_dir/stderr.$1" "$attempt_dir/stdout.$1" 2>/dev/null | tail -c 4000 \
+    | sed -e 's/--print-timeout[= ]*[0-9]*[a-z]*//g' -e 's/--log-file[= ]*[^ ]*//g'
 }
 
 # --- Model preflight ------------------------------------------------------------------

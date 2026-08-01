@@ -933,6 +933,303 @@ else
 fi
 
 echo
+echo "-- Heavy execution lifecycle (TTK / attempts / fusion) -------------------"
+
+# new_heavy <mock-mode> — one isolated heavy job. Sets HB/HJOBS/HOUT/HJD.
+new_heavy() {
+  HB="$(mktemp -d "${TMPDIR:-/tmp}/z3heavy.XXXXXX")"
+  mkdir -p "$HB/bin"
+  printf '#!/usr/bin/env bash\nexec bash "%s/mock_agy.sh" "$@"\n' "$TESTS_DIR" > "$HB/bin/agy"
+  chmod +x "$HB/bin/agy"
+  printf 'Rebuild the dashboard to match the reference design.\n' > "$HB/mission.md"
+  HJOBS="$HB/jobs"; HOUT="$HB/out.md"
+  env PATH="$HB/bin:$PATH" MOCK_AGY_MODE="$1" AGY_CLI_DIR="$HB/agyhome" \
+      MOCK_AGY_COUNT="$HB/count" Z3F_JOBS_ROOT="$HJOBS" \
+      Z3F_GEMINI_TTK=30 Z3F_WAIT_SECONDS=150 \
+      bash "$SCRIPTS/gemini_heavy.sh" run "$HB/mission.md" "$HOUT" \
+      > "$HB/run.out" 2> "$HB/run.err"
+  HRC=$?
+  HJD="$HJOBS/$(ls "$HJOBS" 2>/dev/null | head -1)"
+}
+hstat() { "$PY" -c "
+import json,sys
+try: print(json.load(open(sys.argv[1],encoding='utf-8')).get(sys.argv[2],''))
+except Exception: print('')
+" "$HJD/gemini/$1/status.json" "$2" 2>/dev/null; }
+hfinal() { "$PY" -c "
+import json,sys
+try: print((json.load(open(sys.argv[1],encoding='utf-8')).get('gemini_execution') or {}).get(sys.argv[2],''))
+except Exception: print('')
+" "$HJD/final/provenance.json" "$1" 2>/dev/null; }
+
+# ---------------------------------------------------------------- HEAVY 1: fast path
+new_heavy json_ok
+if [ "$HRC" -eq 0 ] && grep -q 'MOCK-NATIVE-ANSWER' "$HOUT" \
+   && [ "$(hstat attempt-01 status)" = "completed" ]; then
+  pass "L1 attempt 01 completing normally yields the canonical result directly"
+else
+  fail "L1 attempt 01 completing normally yields the canonical result directly" \
+       "rc=$HRC a1=$(hstat attempt-01 status) err=$(tail -c 200 "$HB/run.err")"
+fi
+if [ ! -d "$HJD/gemini/attempt-02" ] && [ ! -d "$HJD/gemini/fusion" ]; then
+  pass "L1 no attempt 02 and no fusion are spent when attempt 01 succeeds (fast path)"
+else
+  fail "L1 no attempt 02 and no fusion are spent when attempt 01 succeeds (fast path)"
+fi
+
+# ---------------------------------------------------------------- HEAVY 2/3/5: TTK lifecycle
+new_heavy ttk_then_ok
+if [ "$(hstat attempt-01 status)" = "ttk-checkpoint" ]; then
+  pass "L2 reaching TTK is recorded as ttk-checkpoint, not as a failure"
+else
+  fail "L2 reaching TTK is recorded as ttk-checkpoint, not as a failure" \
+       "got=$(hstat attempt-01 status)"
+fi
+if grep -q 'MOCK-PARTIAL-WORK-1' "$HJD/gemini/attempt-01/output.md" \
+   && grep -q 'MOCK-PARTIAL-WORK-2' "$HJD/gemini/attempt-01/output.md" \
+   && grep -q 'TTK CHECKPOINT' "$HJD/gemini/attempt-01/output.md"; then
+  pass "L3 work completed before TTK is recovered and preserved, not discarded"
+else
+  fail "L3 work completed before TTK is recovered and preserved, not discarded" \
+       "$(head -c 200 "$HJD/gemini/attempt-01/output.md" 2>/dev/null)"
+fi
+if [ "$(hstat attempt-02 status)" = "completed" ] && grep -q 'MOCK-ATTEMPT-02-ANSWER' \
+   "$HJD/gemini/attempt-02/output.md"; then
+  pass "L4 attempt 02 starts after a TTK checkpoint and produces its own result"
+else
+  fail "L4 attempt 02 starts after a TTK checkpoint and produces its own result" \
+       "got=$(hstat attempt-02 status)"
+fi
+# The payload is FILE-BACKED, so the assertion is on the staged artifacts and the manifest, not
+# on the prompt (which deliberately carries no payload — see the argv-cap rationale). The
+# manifest must also certify source==staged, not merely describe what landed.
+FIN="$HJD/gemini/fusion/run/attempt1/ws/fusion-input"
+if grep -q 'MOCK-PARTIAL-WORK-1' "$FIN/attempt-01.md" 2>/dev/null \
+   && grep -q 'MOCK-ATTEMPT-02-ANSWER' "$FIN/attempt-02.md" 2>/dev/null; then
+  pass "L5 fusion receives BOTH attempts as staged files, including the TTK checkpoint's work"
+else
+  fail "L5 fusion receives BOTH attempts as staged files, including the TTK checkpoint's work" \
+       "$(ls "$FIN" 2>/dev/null | tr '\n' ' ')"
+fi
+if "$PY" -c "
+import json,sys
+d=json.load(open(sys.argv[1],encoding='utf-8-sig'))
+a=d['artifacts']
+ok = d['evidence_complete'] and not d['staging_failures']
+# every staged artifact must carry BOTH a source hash and a staged hash, and they must agree
+for n in ('mission.md','attempt-01.md','attempt-02.md'):
+    e=a.get(n,{})
+    ok = ok and e.get('staged') and e.get('source_sha256') and e['source_sha256']==e['staged_sha256']
+sys.exit(0 if ok else 1)" "$HJD/gemini/fusion/manifest.json" 2>/dev/null; then
+  pass "L5 the manifest certifies source==staged for every fusion input (not self-comparison)"
+else
+  fail "L5 the manifest certifies source==staged for every fusion input (not self-comparison)" \
+       "$(head -c 250 "$HJD/gemini/fusion/manifest.json" 2>/dev/null)"
+fi
+if ! grep -q 'MOCK-PARTIAL-WORK-1' "$HJD/gemini/fusion/prompt.md" 2>/dev/null \
+   && [ "$(wc -c < "$HJD/gemini/fusion/prompt.md" 2>/dev/null | tr -d ' ')" -lt 30000 ]; then
+  pass "L5 the argv prompt carries no payload (stays far below the Windows 32767 cap)"
+else
+  fail "L5 the argv prompt carries no payload (stays far below the Windows 32767 cap)" \
+       "bytes=$(wc -c < "$HJD/gemini/fusion/prompt.md" 2>/dev/null)"
+fi
+if [ "$HRC" -eq 0 ] && grep -q 'MOCK-FUSION-ANSWER' "$HOUT" \
+   && [ "$(hfinal canonical_source)" = "fusion" ]; then
+  pass "L6 the canonical result comes from fusion, not from either attempt alone"
+else
+  fail "L6 the canonical result comes from fusion, not from either attempt alone" \
+       "rc=$HRC source=$(hfinal canonical_source) out=$(head -c 80 "$HOUT")"
+fi
+# Fusion is instructed to weigh both rather than defaulting to the later attempt.
+if grep -q 'Do NOT prefer attempt 02 merely because it ran later' "$HJD/gemini/fusion/prompt.md" \
+   && grep -q 'Partial does not mean worthless' "$HJD/gemini/fusion/prompt.md"; then
+  pass "L7 the fusion prompt forbids discarding a checkpoint or defaulting to the later attempt"
+else
+  fail "L7 the fusion prompt forbids discarding a checkpoint or defaulting to the later attempt"
+fi
+
+# A timed-out attempt never reaches the runner's own post-run routing check, so the checkpoint
+# stage has to re-establish it from the preserved agy log. Partial work must still prove which
+# model produced it, or a Flash checkpoint could be fused in as if it were Pro.
+if [ "$(hstat attempt-01 routed_model_label)" = "Gemini 3.1 Pro (High)" ] \
+   && [ "$(hstat attempt-01 model_pin_verified)" = "True" ]; then
+  pass "L7 a TTK checkpoint still proves which model produced the partial work"
+else
+  fail "L7 a TTK checkpoint still proves which model produced the partial work" \
+       "routed=$(hstat attempt-01 routed_model_label) pin=$(hstat attempt-01 model_pin_verified)"
+fi
+
+# ---------------------------------------------------------------- HEAVY 8: artifact isolation
+a1="$HJD/gemini/attempt-01/output.md"; a2="$HJD/gemini/attempt-02/output.md"
+if [ "$a1" != "$a2" ] && [ -s "$a1" ] && [ -s "$a2" ] \
+   && ! grep -q 'MOCK-ATTEMPT-02-ANSWER' "$a1" && ! grep -q 'MOCK-PARTIAL-WORK' "$a2"; then
+  pass "L8 attempts never share a live output file — each writes only its own artifact"
+else
+  fail "L8 attempts never share a live output file — each writes only its own artifact"
+fi
+
+# ---------------------------------------------------------------- HEAVY 9: no clobbering
+# A late attempt-01 finally finishing must not be able to rewrite sealed history.
+before_a2="$(cat "$a2")"; before_fusion="$(cat "$HJD/gemini/fusion/output.md")"
+before_final="$(cat "$HJD/final/output.md")"
+if printf 'LATE-ATTEMPT-01-OVERWRITE\n' | bash -c '
+  source_dir="'"$SCRIPTS"'"
+  dest="'"$HJD"'/gemini/attempt-01/status.json"
+  tmp="$dest.late.$$"; cat > "$tmp"
+  if [ -e "$dest" ]; then rm -f "$tmp"; exit 1; fi
+  mv "$tmp" "$dest"'; then
+  fail "L9 a sealed attempt refuses a late write"
+else
+  pass "L9 a sealed attempt refuses a late write (status.json is written exactly once)"
+fi
+if [ "$(cat "$a2")" = "$before_a2" ] \
+   && [ "$(cat "$HJD/gemini/fusion/output.md")" = "$before_fusion" ] \
+   && [ "$(cat "$HJD/final/output.md")" = "$before_final" ]; then
+  pass "L9 attempt 02, the fusion result and the canonical output are all untouched"
+else
+  fail "L9 attempt 02, the fusion result and the canonical output are all untouched"
+fi
+
+# ---------------------------------------------------------------- HEAVY 10: re-attach
+# The caller giving up must not launch a second execution of the same mission.
+calls_before="$(grep -cx -- '--print' "$HB/count" 2>/dev/null || echo 0)"
+env PATH="$HB/bin:$PATH" MOCK_AGY_MODE=ttk_then_ok AGY_CLI_DIR="$HB/agyhome" \
+    MOCK_AGY_COUNT="$HB/count" Z3F_JOBS_ROOT="$HJOBS" Z3F_GEMINI_TTK=30 Z3F_WAIT_SECONDS=20 \
+    bash "$SCRIPTS/gemini_heavy.sh" run "$HB/mission.md" "$HB/out2.md" \
+    > "$HB/run2.out" 2> "$HB/run2.err"
+rc2=$?
+n_agy_after="$(wc -c < "$HB/count" 2>/dev/null | tr -d ' ')"
+if [ "$rc2" -eq 0 ] && [ "${n_agy_after:-0}" -eq 3 ] && grep -q 'MOCK-FUSION-ANSWER' "$HB/out2.md"; then
+  pass "L10 re-invoking a finished mission re-attaches and collects — no duplicate execution"
+else
+  fail "L10 re-invoking a finished mission re-attaches and collects — no duplicate execution" \
+       "rc=$rc2 agy_invocations=$n_agy_after (expect 3: attempt01+attempt02+fusion)"
+fi
+
+# ---------------------------------------------------------------- HEAVY 11: provenance
+if [ "$(hfinal ttk_seconds_per_attempt)" = "30" ] \
+   && [ "$(hfinal reasoning_effort)" = "high" ] \
+   && [ "$(hstat attempt-01 conversation_id)" != "" -o "$(hstat attempt-02 conversation_id)" != "" ] \
+   && [ "$(hstat attempt-02 output_transport)" = "json" ]; then
+  pass "L11 provenance records both attempts, effort, TTK, transports and conversation ids"
+else
+  fail "L11 provenance records both attempts, effort, TTK, transports and conversation ids" \
+       "ttk=$(hfinal ttk_seconds_per_attempt) effort=$(hfinal reasoning_effort) t2=$(hstat attempt-02 output_transport)"
+fi
+if [ "$(hfinal final_status)" = "success" ] && [ -s "$HJD/final/provenance.json" ]; then
+  pass "L11 the fusion stage and final status are represented in the lifecycle record"
+else
+  fail "L11 the fusion stage and final status are represented in the lifecycle record"
+fi
+
+# ---------------------------------------------------------------- HEAVY 12: deterministic abort
+# A pin mismatch must NOT buy a second multi-hour attempt.
+new_heavy json_ok >/dev/null 2>&1 || true
+HB2="$(mktemp -d "${TMPDIR:-/tmp}/z3heavyD.XXXXXX")"; mkdir -p "$HB2/bin"
+printf '#!/usr/bin/env bash\nexec bash "%s/mock_agy.sh" "$@"\n' "$TESTS_DIR" > "$HB2/bin/agy"
+chmod +x "$HB2/bin/agy"
+printf 'A deterministic-failure mission.\n' > "$HB2/mission.md"
+env PATH="$HB2/bin:$PATH" MOCK_AGY_MODE=json_ok MOCK_AGY_LABEL="Gemini 3.6 Flash (High)" \
+    AGY_CLI_DIR="$HB2/agyhome" MOCK_AGY_COUNT="$HB2/count" Z3F_JOBS_ROOT="$HB2/jobs" \
+    Z3F_GEMINI_TTK=30 Z3F_WAIT_SECONDS=120 \
+    bash "$SCRIPTS/gemini_heavy.sh" run "$HB2/mission.md" "$HB2/out.md" \
+    > "$HB2/run.out" 2> "$HB2/run.err"
+drc=$?
+dcount="$(wc -c < "$HB2/count" 2>/dev/null | tr -d ' ')"
+DJD="$HB2/jobs/$(ls "$HB2/jobs" 2>/dev/null | head -1)"
+if [ "$drc" -ne 0 ] && [ "${dcount:-0}" -eq 1 ] && [ ! -d "$DJD/gemini/attempt-02" ]; then
+  pass "L12 a routed-model mismatch aborts the mission — no second multi-hour attempt is spent"
+else
+  fail "L12 a routed-model mismatch aborts the mission — no second multi-hour attempt is spent" \
+       "rc=$drc agy_invocations=$dcount attempt02=$([ -d "$DJD/gemini/attempt-02" ] && echo yes || echo no)"
+fi
+
+# ------------------------------------------------- HEAVY 14: TTK with nothing recoverable
+# Adversarial review finding C1. run_gemini.sh truncates output.md on any non-zero exit, so
+# after a TTK the ONLY thing that can refill it is the transcript scraper. If that comes back
+# empty (format change, workspace-key mismatch, staleness gate), a TTK must still hand off to
+# attempt-02 — a recovery miss must not silently become "abort the mission".
+HB3="$(mktemp -d "${TMPDIR:-/tmp}/z3heavyC1.XXXXXX")"; mkdir -p "$HB3/bin"
+printf '#!/usr/bin/env bash\nexec bash "%s/mock_agy.sh" "$@"\n' "$TESTS_DIR" > "$HB3/bin/agy"
+chmod +x "$HB3/bin/agy"
+printf 'A mission whose first attempt leaves no transcript.\n' > "$HB3/mission.md"
+# AGY_CLI_DIR deliberately unset => the mock writes no transcript => nothing to recover.
+env PATH="$HB3/bin:$PATH" MOCK_AGY_MODE=ttk_then_ok MOCK_AGY_COUNT="$HB3/count" \
+    Z3F_JOBS_ROOT="$HB3/jobs" Z3F_GEMINI_TTK=20 Z3F_WAIT_SECONDS=120 \
+    bash "$SCRIPTS/gemini_heavy.sh" run "$HB3/mission.md" "$HB3/out.md" \
+    > "$HB3/run.out" 2> "$HB3/run.err"
+c1rc=$?
+C1JD="$HB3/jobs/$(ls "$HB3/jobs" 2>/dev/null | head -1)"
+c1a1="$("$PY" -c "
+import json,sys
+try: print(json.load(open(sys.argv[1],encoding='utf-8')).get('status',''))
+except Exception: print('')" "$C1JD/gemini/attempt-01/status.json" 2>/dev/null)"
+if [ "$c1a1" = "ttk-checkpoint" ] && [ -d "$C1JD/gemini/attempt-02" ] && [ "$c1rc" -eq 0 ]; then
+  pass "L14 a TTK with nothing recoverable still hands off to attempt 02 (never aborts)"
+else
+  fail "L14 a TTK with nothing recoverable still hands off to attempt 02 (never aborts)" \
+       "rc=$c1rc a1=$c1a1 attempt02=$([ -d "$C1JD/gemini/attempt-02" ] && echo yes || echo no)"
+fi
+
+# ------------------------------------------------- HEAVY 15: reclaim must not re-run a seal
+# Review finding C2. A supervisor that dies mid-mission leaves attempt-01 sealed. Re-running it
+# would truncate the recovered checkpoint before the new agy starts, and the refused seal would
+# leave provenance describing the dead run.
+before_a1="$(cat "$C1JD/gemini/attempt-01/status.json")"
+calls_pre="$(wc -c < "$HB3/count" 2>/dev/null | tr -d ' ')"
+rm -f "$C1JD/heartbeat"
+env PATH="$HB3/bin:$PATH" MOCK_AGY_MODE=ttk_then_ok MOCK_AGY_COUNT="$HB3/count" \
+    Z3F_JOBS_ROOT="$HB3/jobs" Z3F_GEMINI_TTK=20 Z3F_WAIT_SECONDS=60 \
+    bash "$SCRIPTS/gemini_heavy.sh" run "$HB3/mission.md" "$HB3/out2.md" \
+    > "$HB3/run2.out" 2>&1
+calls_post="$(wc -c < "$HB3/count" 2>/dev/null | tr -d ' ')"
+if [ "$(cat "$C1JD/gemini/attempt-01/status.json")" = "$before_a1" ] \
+   && [ "${calls_post:-0}" -eq "${calls_pre:-0}" ]; then
+  pass "L15 a reclaimed job resumes past sealed attempts instead of destructively re-running them"
+else
+  fail "L15 a reclaimed job resumes past sealed attempts instead of destructively re-running them" \
+       "agy calls ${calls_pre}->${calls_post}"
+fi
+
+# ------------------------------------------------- HEAVY 16: checkpoint routing is ENFORCED
+# Review finding M3. Recording the routed label is not enough: a checkpoint produced by Flash
+# must be discarded, not fused in as this model's partial work.
+HB4="$(mktemp -d "${TMPDIR:-/tmp}/z3heavyM3.XXXXXX")"; mkdir -p "$HB4/bin"
+printf '#!/usr/bin/env bash\nexec bash "%s/mock_agy.sh" "$@"\n' "$TESTS_DIR" > "$HB4/bin/agy"
+chmod +x "$HB4/bin/agy"
+printf 'A mission whose attempt routes to the wrong model.\n' > "$HB4/mission.md"
+env PATH="$HB4/bin:$PATH" MOCK_AGY_MODE=ttk AGY_CLI_DIR="$HB4/agyhome" \
+    MOCK_AGY_LABEL="Gemini 3.6 Flash (High)" MOCK_AGY_COUNT="$HB4/count" \
+    Z3F_JOBS_ROOT="$HB4/jobs" Z3F_GEMINI_TTK=20 Z3F_WAIT_SECONDS=90 \
+    bash "$SCRIPTS/gemini_heavy.sh" run "$HB4/mission.md" "$HB4/out.md" \
+    > "$HB4/run.out" 2> "$HB4/run.err"
+M3JD="$HB4/jobs/$(ls "$HB4/jobs" 2>/dev/null | head -1)"
+m3s="$("$PY" -c "
+import json,sys
+try: print(json.load(open(sys.argv[1],encoding='utf-8')).get('status',''))
+except Exception: print('')" "$M3JD/gemini/attempt-01/status.json" 2>/dev/null)"
+if [ "$m3s" = "failed" ] && ! grep -q 'MOCK-PARTIAL-WORK' "$M3JD/gemini/attempt-01/output.md" 2>/dev/null; then
+  pass "L16 a checkpoint that routed to the wrong model is discarded, not fused in"
+else
+  fail "L16 a checkpoint that routed to the wrong model is discarded, not fused in" \
+       "status=$m3s content=$(head -c 80 "$M3JD/gemini/attempt-01/output.md" 2>/dev/null)"
+fi
+
+# ---------------------------------------------------------------- HEAVY 13: production config
+if grep -q 'Z3F_GEMINI_TTK:-28800' "$SCRIPTS/gemini_heavy.sh"; then
+  pass "L13 the production default TTK is 28800s (8 hours) PER ATTEMPT"
+else
+  fail "L13 the production default TTK is 28800s (8 hours) PER ATTEMPT"
+fi
+# --effort must NOT be passed: agy 1.1.8 rejects it for this model, and the id+effort spelling
+# silently routes to Flash. The tier is carried by the pinned label itself.
+if ! grep -v '^[[:space:]]*#' "$SCRIPTS/run_gemini.sh" | grep -q -- '--effort'; then
+  pass "L13 --effort is never passed (the pinned label already selects the highest tier)"
+else
+  fail "L13 --effort is never passed (the pinned label already selects the highest tier)"
+fi
+
+echo
 echo "=============================================================================="
 printf 'passed: %d   failed: %d\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
