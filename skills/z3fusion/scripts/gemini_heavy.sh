@@ -496,7 +496,15 @@ try {
   }
   $killed = @(); $survivors = @()
   foreach ($procId in $targets.Keys) {
-    & taskkill.exe /PID $procId /T /F 2>&1 | Out-Null
+    # taskkill writes ERROR: The process ... not found. on stderr when the target has ALREADY
+    # exited. At a TTK boundary that is the normal case: the runner own timeout backstop has
+    # already killed agy by the time we sweep. Under PowerShell 5.1 a native command stderr
+    # merged with 2>&1 becomes ErrorRecords, and with $ErrorActionPreference = Stop that THROWS
+    # — so an already-dead process fell into the catch below as confirmed_dead = null, which
+    # fails closed and aborts the mission. Every real TTK checkpoint died here. Swallow it:
+    # taskkill complaint is not evidence either way. The Get-CimInstance check below is what
+    # establishes death, and no such process is the strongest possible proof of it.
+    try { & taskkill.exe /PID $procId /T /F 2> $null | Out-Null } catch { }
     Start-Sleep -Milliseconds 400
     $still = Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -EA SilentlyContinue
     # Same pid with a DIFFERENT creation time is an unrelated process that reused the pid, not
@@ -535,7 +543,8 @@ $owned = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
 foreach ($p in $owned) {
   $rec = [ordered]@{ pid = $p.ProcessId; name = $p.Name; created = "$($p.CreationDate)" }
   # /T takes the whole tree, /F forces. Kill the tree, then VERIFY rather than trust the exit.
-  & taskkill.exe /PID $p.ProcessId /T /F 2>&1 | Out-Null
+  # Same 2>&1 hazard as the identity sweep: an already-exited pid must not become an error.
+  try { & taskkill.exe /PID $p.ProcessId /T /F 2> $null | Out-Null } catch { }
   Start-Sleep -Milliseconds 400
   $still = Get-CimInstance Win32_Process -Filter "ProcessId=$($p.ProcessId)" -ErrorAction SilentlyContinue
   # PID reuse guard: same pid but a different creation time is a DIFFERENT process, not a survivor.

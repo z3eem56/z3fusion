@@ -249,7 +249,7 @@ whatever panel the machine can actually support.
 These are the properties the test suite pins down. Run it with:
 
 ```bash
-bash skills/z3fusion/tests/run_tests.sh     # 78 assertions, no network, no model spend
+bash skills/z3fusion/tests/run_tests.sh     # REAL agy — needs auth, spends tokens, takes minutes
 ```
 
 ### Gemini is hard-pinned to Gemini 3.1 Pro (High)
@@ -261,8 +261,8 @@ default. If the model is not listed by `agy models`, the panelist fails with
 
 Configuration alone is not treated as proof. After every run the runner reads back which model agy
 *actually routed to*, from agy's own per-invocation log, and **fails the panelist on mismatch**. This is
-load-bearing: on agy 1.1.8, passing the runtime id `gemini-3.1-pro-high` while the CLI cannot reach its
-model table is silently downgraded —
+load-bearing: on agy 1.1.8 **and re-verified on 1.1.9**, passing the runtime id `gemini-3.1-pro-high`
+while the CLI cannot reach its model table is silently downgraded —
 
 ```
 resolver.go:85] Model ID gemini-3.1-pro-high not in local config, defaulting to CCPA
@@ -441,7 +441,7 @@ skills/z3fusion/
     gemini_governance.md    the karpathy-engineering-v1 profile injected into every Gemini prompt
   tests/
     run_tests.sh            101 assertions: model pin, relay normalization/recovery, bounded retry, transports, raw-output rendering, governance, heavy lifecycle, hardening
-    mock_agy.sh             stand-in `agy` on PATH so the transport paths are testable offline
+    fixtures/               real captured agy artifacts (e.g. a real silent-downgrade log)
 skills/z3fusion-plan/
   SKILL.md                  OMC interview → 3-round seeded panel → concise .omc/plans/ → review/execute
 commands/
